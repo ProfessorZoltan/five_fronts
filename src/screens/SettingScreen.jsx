@@ -122,8 +122,8 @@ export default function SettingScreen({ code, game, slot }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pb-2">
-      <div className="flex items-center justify-between p-3 border-b border-gold-600/20">
+    <div className="min-h-screen flex flex-col pb-4">
+      <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur flex items-center justify-between p-3 border-b border-gold-600/20">
         <div>
           <div className="text-gold-400 font-display text-lg leading-none">Setting Phase</div>
           <div className="text-gold-200/60 text-xs">
@@ -135,8 +135,8 @@ export default function SettingScreen({ code, game, slot }) {
         </Button>
       </div>
 
-      <div className="px-3 flex-1">
-        <div className="space-y-2 pt-2">
+      <div className="px-3 pt-2">
+        <div className="space-y-2">
           {hands.map((h, hi) => (
             <HandRow
               key={h.id}
@@ -148,9 +148,8 @@ export default function SettingScreen({ code, game, slot }) {
             />
           ))}
         </div>
+        <Reserve cards={reserveCards} selectedKey={selectedKey} onCardTap={selectCard} />
       </div>
-
-      <Reserve cards={reserveCards} selectedKey={selectedKey} onCardTap={selectCard} />
 
       {confirmOpen && (
         <Modal onClose={() => !submitting && setConfirmOpen(false)}>
@@ -203,29 +202,29 @@ function HandRow({ hand, index, selectedKey, onSlotTap, onCardTap }) {
 function Reserve({ cards, selectedKey, onCardTap }) {
   if (cards.length === 0) {
     return (
-      <div className="mt-3 mx-3 px-4 py-3 rounded-xl bg-felt-800/60 border border-gold-600/20 text-center text-gold-200/50 text-sm">
+      <div className="mt-3 px-4 py-3 rounded-xl bg-felt-800/60 border border-gold-600/20 text-center text-gold-200/50 text-sm">
         All cards placed — review and lock in.
       </div>
     )
   }
   return (
-    <div className="mt-3 px-3">
-      <div className="text-gold-200/60 text-xs mb-1">Your cards — tap one, then tap a slot</div>
-      <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-1 px-1">
-        <div className="flex gap-1.5">
-          {cards.map(c => {
-            const k = cardKey(c)
-            return (
-              <CardSlot
-                key={k}
-                card={{ ...c, faceUp: true }}
-                size="sm"
-                selected={selectedKey === k}
-                onClick={() => onCardTap(k)}
-              />
-            )
-          })}
-        </div>
+    <div className="mt-3">
+      <div className="text-gold-200/60 text-xs mb-1">
+        Your cards — strongest first. Tap one, then tap a slot above.
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {cards.map(c => {
+          const k = cardKey(c)
+          return (
+            <CardSlot
+              key={k}
+              card={{ ...c, faceUp: true }}
+              size="sm"
+              selected={selectedKey === k}
+              onClick={() => onCardTap(k)}
+            />
+          )
+        })}
       </div>
     </div>
   )

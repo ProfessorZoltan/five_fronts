@@ -34,7 +34,7 @@ export default function MatchupScreen({ code, game, slot }) {
 
       {state === 'respond' && (isMyTurn
         ? <RespondView code={code} slot={slot} game={game} myHands={myHands} myRemainingIds={myRemainingIds} />
-        : <WaitingOnResponseView game={game} slot={slot} oppRemainingCount={oppRemainingCount} />
+        : <WaitingOnResponseView game={game} oppRemainingCount={oppRemainingCount} />
       )}
 
       {state === 'reveal' && (
@@ -208,9 +208,11 @@ function WaitingView({ message, oppRemainingCount }) {
   )
 }
 
-// Opponent played — you can see the 3 face-up cards. While you make your
-// response, you see their offer.
-function WaitingOnResponseView({ game, slot, oppRemainingCount }) {
+// Shown to the offerer after they've played, while the responder is choosing.
+// The cards displayed here are the player's OWN played hand — face-down cards
+// render with the FACE-DOWN overlay (from CardSlot) so the player remembers
+// which cards their opponent can't see.
+function WaitingOnResponseView({ game, oppRemainingCount }) {
   const offer = game.currentOffer
   if (!offer) {
     return <WaitingView message="Waiting…" oppRemainingCount={oppRemainingCount} />
@@ -218,13 +220,13 @@ function WaitingOnResponseView({ game, slot, oppRemainingCount }) {
   return (
     <div className="px-3 pt-3 flex-1">
       <div className="text-gold-200/80 animate-pulseSoft mb-2">
-        Opponent played a hand. Waiting for your next round…
+        You played a hand. Opponent is choosing a response…
       </div>
-      <div className="text-gold-200/50 text-xs mb-1">Opponent's offered hand</div>
+      <div className="text-gold-200/50 text-xs mb-1">Your played hand</div>
       <div className="flex gap-1.5">
         {offer.cards.map((c, i) => (
           <div key={i} className="flex-1 max-w-[18%]">
-            {c.faceUp ? <CardSlot card={c} size="sm" /> : <CardBack size="sm" />}
+            <CardSlot card={c} size="sm" />
           </div>
         ))}
       </div>
