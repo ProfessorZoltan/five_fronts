@@ -1,21 +1,31 @@
 // Firebase game-state operations for Five Fronts.
 //
 // Data shape (under /games/{code}):
-//   status: 'waiting' | 'setting' | 'matching' | 'revealing' | 'done'
-//   seed: number
-//   createdAt: number
+//   status: 'waiting' | 'setting' | 'matching' | 'done'
+//   seed, createdAt
+//   firstPlayer: 'p1' | 'p2'            // who plays hand first in round 0
 //   players:
-//     p1: { uid, connected, hand[25], hands[5], locked, ready }
-//     p2: { same }
-//   visibleHands: { p1: [5 hands w/ hidden face-downs], p2: [...] }
-//   pairings: [{ p1HandId, p2HandId, madeBy }]
-//   currentTurn: 'p1' | 'p2'
-//   firstSelector: 'p1' | 'p2'
-//   results: [{ pairingIndex, p1Hand, p2Hand, winner, p1HandRank, p2HandRank }]
+//     p1: { uid, connected, hand[25], hands[5 {id, cards[5]}], locked }
+//     p2: same
+//   currentRound: 0..4
+//   currentPlayer: 'p1' | 'p2'          // whose action we're waiting on
+//   roundState: 'play' | 'respond' | 'reveal'
+//   currentOffer:    { handId, cards[5 w/ faceUp] } | null
+//   currentResponse: { handId, cards[5 w/ faceUp] } | null
+//   roundReady: { p1, p2 }              // both true -> advance past 'reveal'
+//   rounds: [                           // completed rounds
+//     {
+//       playedBy: 'p1' | 'p2',
+//       p1HandId, p2HandId,
+//       p1Hand: [cards w/ faceUp],
+//       p2Hand: [cards w/ faceUp],
+//       winner, p1HandRank, p2HandRank,
+//     }
+//   ]
 //   winner: null | 'p1' | 'p2' | 'draw'
 
 import {
-  ref, get, set, update, onValue, off, runTransaction, serverTimestamp,
+  ref, get, set, update, onValue, off, runTransaction,
 } from 'firebase/database'
 import { getDb, getPlayerId } from './client.js'
 import { dealFromSeed, randomSeed, randomGameCode } from '../game/deck.js'
@@ -29,7 +39,6 @@ const childRef = (code, path) => ref(getDb(), `games/${code}/${path}`)
 export async function createGame() {
   const uid = getPlayerId()
   const db = getDb()
-  // Try codes until one is unclaimed.
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = randomGameCode()
     const tx = await runTransaction(ref(db, `games/${code}`), existing => {
@@ -38,10 +47,9 @@ export async function createGame() {
         status: 'waiting',
         seed: randomSeed(),
         createdAt: Date.now(),
-        firstSelector: Math.random() < 0.5 ? 'p1' : 'p2',
-        currentTurn: null,
+        firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
         players: {
-          p1: { uid, connected: true, locked: false, ready: false },
+          p1: { uid, connected: true, locked: false },
           p2: null,
         },
       }
@@ -57,19 +65,16 @@ export async function joinGame(code) {
   const snap = await get(gameRef(code))
   if (!snap.exists()) throw new Error('Game not found.')
   const game = snap.val()
-  // If this player already has a slot in this game, return it.
   if (game.players?.p1?.uid === uid) return { code, slot: 'p1' }
   if (game.players?.p2?.uid === uid) return { code, slot: 'p2' }
   if (game.players?.p2) throw new Error('Game is full.')
 
-  // Claim p2 via transaction.
   const tx = await runTransaction(childRef(code, 'players/p2'), existing => {
-    if (existing) return // raced — someone else joined
-    return { uid, connected: true, locked: false, ready: false }
+    if (existing) return
+    return { uid, connected: true, locked: false }
   })
   if (!tx.committed) throw new Error('Game is full.')
 
-  // After both players are present, deal cards + move to setting.
   await dealIfReady(code)
   return { code, slot: 'p2' }
 }
@@ -91,51 +96,40 @@ async function dealIfReady(code) {
 
 // ---------- Setting phase ----------
 
-// handsConfig: array of 5 objects { cards: [{rank,suit,value,faceUp}x5] }
-export async function lockIn(code, slot, handsConfig) {
-  validateHandsConfig(handsConfig)
-  const visible = handsConfig.map((h, id) => ({
-    id,
-    cards: h.cards.map(c =>
-      c.faceUp
-        ? { rank: c.rank, suit: c.suit, value: c.value, faceUp: true }
-        : { faceUp: false }
-    ),
-  }))
-
+// hands: array of 5 { id, cards[5 {rank, suit, value}] }
+// Face-up decisions are NOT made here anymore — those happen per-round during matching.
+export async function lockIn(code, slot, hands) {
+  validateHands(hands)
   await update(gameRef(code), {
-    [`players/${slot}/hands`]: handsConfig,
+    [`players/${slot}/hands`]: hands,
     [`players/${slot}/locked`]: true,
-    [`visibleHands/${slot}`]: visible,
   })
 
-  // If both players have locked in, move to matching phase.
   const snap = await get(gameRef(code))
   const g = snap.val()
-  if (g.players.p1.locked && g.players.p2.locked && g.status !== 'matching') {
+  if (g.players.p1.locked && g.players.p2.locked && g.status === 'setting') {
     await update(gameRef(code), {
       status: 'matching',
-      currentTurn: g.firstSelector,
+      currentRound: 0,
+      currentPlayer: g.firstPlayer,
+      roundState: 'play',
+      currentOffer: null,
+      currentResponse: null,
+      roundReady: { p1: false, p2: false },
+      rounds: [],
     })
   }
 }
 
-function validateHandsConfig(handsConfig) {
-  if (!Array.isArray(handsConfig) || handsConfig.length !== 5) {
+function validateHands(hands) {
+  if (!Array.isArray(hands) || hands.length !== 5) {
     throw new Error('Must have exactly 5 hands.')
   }
-  for (const h of handsConfig) {
+  const seen = new Set()
+  for (const h of hands) {
     if (!Array.isArray(h.cards) || h.cards.length !== 5) {
       throw new Error('Each hand must have exactly 5 cards.')
     }
-    const faceUpCount = h.cards.filter(c => c.faceUp).length
-    if (faceUpCount !== 3) {
-      throw new Error('Each hand must have exactly 3 face-up cards.')
-    }
-  }
-  // Ensure 25 distinct cards across all 5 hands.
-  const seen = new Set()
-  for (const h of handsConfig) {
     for (const c of h.cards) {
       const k = `${c.rank}-${c.suit}`
       if (seen.has(k)) throw new Error('Duplicate card detected.')
@@ -147,78 +141,155 @@ function validateHandsConfig(handsConfig) {
 
 // ---------- Matchup phase ----------
 
-// p1HandId is the sender's own hand if slot === 'p1', else opponent's. We just
-// store both ids and who made the pick.
-export async function makePairing(code, slot, myHandId, oppHandId) {
+// Active player plays one of their remaining hands, choosing 3 of the 5 cards
+// to turn face-up. `faceUp` is a boolean array of length 5 matching card slots.
+export async function playHand(code, slot, handId, faceUp) {
   const snap = await get(gameRef(code))
   const g = snap.val()
   if (g.status !== 'matching') throw new Error('Not in matching phase.')
-  if (g.currentTurn !== slot) throw new Error('Not your turn.')
+  if (g.roundState !== 'play') throw new Error('Not in play substate.')
+  if (g.currentPlayer !== slot) throw new Error('Not your turn to play.')
 
-  const pairings = g.pairings || []
-  const opp = slot === 'p1' ? 'p2' : 'p1'
+  const used = usedHandIds(g.rounds || [], slot)
+  if (used.has(handId)) throw new Error('Hand already used.')
+  assertFaceUpValid(faceUp)
 
-  // Prevent re-pairing an already-paired hand.
-  for (const p of pairings) {
-    if (slot === 'p1' && (p.p1HandId === myHandId || p.p2HandId === oppHandId)) {
-      throw new Error('Hand already paired.')
-    }
-    if (slot === 'p2' && (p.p2HandId === myHandId || p.p1HandId === oppHandId)) {
-      throw new Error('Hand already paired.')
-    }
-  }
+  const baseHand = g.players[slot].hands[handId].cards
+  const cards = baseHand.map((c, i) => ({ ...c, faceUp: !!faceUp[i] }))
 
-  const newPairing = slot === 'p1'
-    ? { p1HandId: myHandId, p2HandId: oppHandId, madeBy: 'p1' }
-    : { p1HandId: oppHandId, p2HandId: myHandId, madeBy: 'p2' }
-
-  const next = [...pairings, newPairing]
-
-  // If this was the 4th pairing, auto-complete the 5th from the remaining ids.
-  if (next.length === 4) {
-    const p1Used = new Set(next.map(p => p.p1HandId))
-    const p2Used = new Set(next.map(p => p.p2HandId))
-    const p1Left = [0,1,2,3,4].find(i => !p1Used.has(i))
-    const p2Left = [0,1,2,3,4].find(i => !p2Used.has(i))
-    next.push({ p1HandId: p1Left, p2HandId: p2Left, madeBy: 'auto' })
-  }
-
-  const updates = { pairings: next }
-  if (next.length >= 5) {
-    // All 5 pairings made — resolve and move to reveal phase.
-    updates.results = resolveResults(g, next)
-    updates.winner = tallyWinner(updates.results)
-    updates.status = 'revealing'
-    updates.currentTurn = null
-  } else {
-    updates.currentTurn = opp
-  }
-  await update(gameRef(code), updates)
-}
-
-function resolveResults(g, pairings) {
-  const p1Hands = g.players.p1.hands
-  const p2Hands = g.players.p2.hands
-  return pairings.map((p, i) => {
-    const p1Hand = p1Hands[p.p1HandId].cards
-    const p2Hand = p2Hands[p.p2HandId].cards
-    const e1 = evaluateHand(p1Hand)
-    const e2 = evaluateHand(p2Hand)
-    const winner = compareHands(p1Hand, p2Hand)
-    return {
-      pairingIndex: i,
-      p1Hand,
-      p2Hand,
-      p1HandRank: e1.label,
-      p2HandRank: e2.label,
-      winner,
-    }
+  await update(gameRef(code), {
+    currentOffer: { handId, cards },
+    roundState: 'respond',
+    currentPlayer: slot === 'p1' ? 'p2' : 'p1',
   })
 }
 
-function tallyWinner(results) {
+// Responder picks one of their remaining hands + which 3 cards face-up.
+// On commit we compute the round's resolution, stash it on the round record,
+// and transition to 'reveal'.
+export async function respondToHand(code, slot, handId, faceUp) {
+  const snap = await get(gameRef(code))
+  const g = snap.val()
+  if (g.status !== 'matching') throw new Error('Not in matching phase.')
+  if (g.roundState !== 'respond') throw new Error('Not in respond substate.')
+  if (g.currentPlayer !== slot) throw new Error('Not your turn to respond.')
+
+  const used = usedHandIds(g.rounds || [], slot)
+  if (used.has(handId)) throw new Error('Hand already used.')
+  assertFaceUpValid(faceUp)
+
+  const baseHand = g.players[slot].hands[handId].cards
+  const cards = baseHand.map((c, i) => ({ ...c, faceUp: !!faceUp[i] }))
+
+  await update(gameRef(code), {
+    currentResponse: { handId, cards },
+    roundState: 'reveal',
+    roundReady: { p1: false, p2: false },
+  })
+}
+
+// Called when a player taps "Continue" on the reveal pane. When both players
+// have tapped, we finalize the round and advance (or end the game).
+export async function readyForNextRound(code, slot) {
+  const snap = await get(gameRef(code))
+  const g = snap.val()
+  if (g.status !== 'matching' || g.roundState !== 'reveal') return
+  const ready = { ...(g.roundReady || {}), [slot]: true }
+
+  if (!(ready.p1 && ready.p2)) {
+    await update(gameRef(code), { roundReady: ready })
+    return
+  }
+
+  // Finalize the current round.
+  const offer = g.currentOffer
+  const response = g.currentResponse
+  if (!offer || !response) return
+
+  const offerer = previousPlayer(g.currentPlayer) // responder is currentPlayer; offerer is the other
+  const responder = g.currentPlayer
+  const p1HandId = offerer === 'p1' ? offer.handId : response.handId
+  const p2HandId = offerer === 'p1' ? response.handId : offer.handId
+  const p1Cards = offerer === 'p1' ? offer.cards : response.cards
+  const p2Cards = offerer === 'p1' ? response.cards : offer.cards
+
+  const e1 = evaluateHand(stripFaceUp(p1Cards))
+  const e2 = evaluateHand(stripFaceUp(p2Cards))
+  const winner = compareHands(stripFaceUp(p1Cards), stripFaceUp(p2Cards))
+
+  const newRound = {
+    playedBy: offerer,
+    p1HandId, p2HandId,
+    p1Hand: p1Cards,
+    p2Hand: p2Cards,
+    p1HandRank: e1.label,
+    p2HandRank: e2.label,
+    winner,
+  }
+
+  const rounds = [...(g.rounds || []), newRound]
+  const nextRoundIdx = (g.currentRound ?? 0) + 1
+  const isLast = nextRoundIdx >= 5
+
+  if (isLast) {
+    await update(gameRef(code), {
+      rounds,
+      currentOffer: null,
+      currentResponse: null,
+      roundReady: { p1: false, p2: false },
+      status: 'done',
+      winner: tallyWinner(rounds),
+    })
+    return
+  }
+
+  // Whoever played in round 0 plays on even rounds; other plays on odd rounds.
+  const firstPlayer = g.firstPlayer
+  const nextPlayer = (nextRoundIdx % 2 === 0) ? firstPlayer : (firstPlayer === 'p1' ? 'p2' : 'p1')
+
+  // Round 5 (index 4) — and in general the last remaining hand for each player —
+  // auto-play if only 1 hand left on both sides. Actually with 5 rounds of 5
+  // hands this only happens in the last round. We handled `isLast` above so
+  // this isn't strictly necessary, but guard against future changes.
+
+  await update(gameRef(code), {
+    rounds,
+    currentRound: nextRoundIdx,
+    currentPlayer: nextPlayer,
+    roundState: 'play',
+    currentOffer: null,
+    currentResponse: null,
+    roundReady: { p1: false, p2: false },
+  })
+}
+
+function previousPlayer(currentPlayer) {
+  return currentPlayer === 'p1' ? 'p2' : 'p1'
+}
+
+function usedHandIds(rounds, slot) {
+  const s = new Set()
+  for (const r of rounds) {
+    s.add(slot === 'p1' ? r.p1HandId : r.p2HandId)
+  }
+  return s
+}
+
+function assertFaceUpValid(faceUp) {
+  if (!Array.isArray(faceUp) || faceUp.length !== 5) {
+    throw new Error('faceUp must be an array of 5 booleans.')
+  }
+  const trues = faceUp.filter(Boolean).length
+  if (trues !== 3) throw new Error('Exactly 3 cards must be face-up.')
+}
+
+function stripFaceUp(cards) {
+  return cards.map(c => ({ rank: c.rank, suit: c.suit, value: c.value }))
+}
+
+function tallyWinner(rounds) {
   let p1 = 0, p2 = 0
-  for (const r of results) {
+  for (const r of rounds) {
     if (r.winner === 'p1') p1++
     else if (r.winner === 'p2') p2++
   }
@@ -227,43 +298,20 @@ function tallyWinner(results) {
   return 'draw'
 }
 
-// ---------- Reveal phase ----------
-
-// Mark current device ready to flip the next pairing; when both ready,
-// increment revealIndex.
-export async function markReadyForReveal(code, slot) {
-  const snap = await get(gameRef(code))
-  const g = snap.val()
-  const ready = g.revealReady || {}
-  ready[slot] = true
-  if (ready.p1 && ready.p2) {
-    const next = (g.revealIndex || 0) + 1
-    const done = next >= (g.results?.length || 0)
-    await update(gameRef(code), {
-      revealReady: { p1: false, p2: false },
-      revealIndex: next,
-      ...(done ? { status: 'done' } : {}),
-    })
-  } else {
-    await update(gameRef(code), { revealReady: ready })
-  }
-}
-
 // ---------- Rematch ----------
 
 export async function rematch(code) {
   const snap = await get(gameRef(code))
   const g = snap.val()
-  const { p1, p2 } = dealFromSeed(randomSeed())
+  const deal = dealFromSeed(randomSeed())
   await set(gameRef(code), {
     status: 'setting',
     seed: randomSeed(),
     createdAt: Date.now(),
-    firstSelector: Math.random() < 0.5 ? 'p1' : 'p2',
-    currentTurn: null,
+    firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
     players: {
-      p1: { uid: g.players.p1.uid, connected: true, locked: false, ready: false, hand: p1 },
-      p2: { uid: g.players.p2.uid, connected: true, locked: false, ready: false, hand: p2 },
+      p1: { uid: g.players.p1.uid, connected: true, locked: false, hand: deal.p1 },
+      p2: { uid: g.players.p2.uid, connected: true, locked: false, hand: deal.p2 },
     },
   })
 }

@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
-import { ResultCard } from './RevealScreen.jsx'
+import ResultCard from '../components/ResultCard.jsx'
 import { rematch } from '../firebase/game.js'
 
 export default function ResultsScreen({ code, game, slot, onLeave }) {
   const opp = slot === 'p1' ? 'p2' : 'p1'
-  const results = game.results || []
+  const rounds = game.rounds || []
   let myWins = 0, oppWins = 0
-  for (const r of results) {
+  for (const r of rounds) {
     if (r.winner === slot) myWins++
     else if (r.winner === opp) oppWins++
   }
@@ -39,10 +39,10 @@ export default function ResultsScreen({ code, game, slot, onLeave }) {
       </div>
 
       <div className="p-3 space-y-2">
-        {results.map((r, i) => (
+        {rounds.map((r, i) => (
           <div key={i}>
-            <div className="text-gold-200/60 text-xs mb-1">Pairing {i + 1}</div>
-            <ResultCard result={r} slot={slot} revealed compact reorder />
+            <div className="text-gold-200/60 text-xs mb-1">Round {i + 1}</div>
+            <ResultCard round={r} slot={slot} revealed compact reorder />
           </div>
         ))}
       </div>

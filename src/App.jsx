@@ -5,7 +5,6 @@ import HomeScreen from './screens/HomeScreen.jsx'
 import LobbyScreen from './screens/LobbyScreen.jsx'
 import SettingScreen from './screens/SettingScreen.jsx'
 import MatchupScreen from './screens/MatchupScreen.jsx'
-import RevealScreen from './screens/RevealScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import ConfigMissingBanner from './components/ConfigMissingBanner.jsx'
 
@@ -67,8 +66,6 @@ export default function App() {
       return <SettingScreen code={session.code} game={game} slot={slot} onLeave={leave} />
     case 'matching':
       return <MatchupScreen code={session.code} game={game} slot={slot} onLeave={leave} />
-    case 'revealing':
-      return <RevealScreen code={session.code} game={game} slot={slot} onLeave={leave} />
     case 'done':
       return <ResultsScreen code={session.code} game={game} slot={slot} onLeave={leave} />
     default:
