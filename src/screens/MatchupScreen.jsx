@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Button from '../components/Button.jsx'
+import LeaveButton from '../components/LeaveButton.jsx'
 import { CardBack, CardSlot } from '../components/Card.jsx'
 import ResultCard from '../components/ResultCard.jsx'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
@@ -10,7 +11,7 @@ import { playHand, respondToHand, readyForNextRound } from '../firebase/game.js'
 //   respond -> other player sees offered 3 face-up cards, picks a response + face-ups
 //   reveal  -> both hands fully shown, face-down cards flip, winner highlighted
 
-export default function MatchupScreen({ code, game, slot }) {
+export default function MatchupScreen({ code, game, slot, onLeave }) {
   const opp = slot === 'p1' ? 'p2' : 'p1'
   const rounds = game.rounds || []
   const usedMine = new Set(rounds.map(r => slot === 'p1' ? r.p1HandId : r.p2HandId))
@@ -25,7 +26,7 @@ export default function MatchupScreen({ code, game, slot }) {
 
   return (
     <div className="min-h-screen flex flex-col pb-4">
-      <Header game={game} slot={slot} />
+      <Header game={game} slot={slot} code={code} onLeave={onLeave} />
 
       {state === 'play' && (isMyTurn
         ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} />
@@ -48,7 +49,7 @@ export default function MatchupScreen({ code, game, slot }) {
   )
 }
 
-function Header({ game, slot }) {
+function Header({ game, slot, code, onLeave }) {
   const rounds = game.rounds || []
   let me = 0, opp = 0
   for (const r of rounds) {
@@ -57,20 +58,21 @@ function Header({ game, slot }) {
   }
   const n = (game.currentRound ?? 0) + 1
   return (
-    <div className="px-4 py-3 border-b border-gold-600/20 flex items-center justify-between">
-      <div>
+    <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur px-4 py-3 border-b border-gold-600/20 flex items-center justify-between gap-2">
+      <div className="flex-1 min-w-0">
         <div className="text-gold-400 font-display text-lg leading-none">Round {n} of 5</div>
-        <div className="text-gold-200/60 text-xs">
+        <div className="text-gold-200/60 text-xs truncate">
           {game.currentPlayer === slot ? 'Your turn' : 'Opponent\'s turn'}
         </div>
       </div>
-      <div className="text-sm">
+      <div className="text-sm whitespace-nowrap">
         <span className="text-gold-200/60 mr-1">You</span>
         <span className="font-display text-gold-400 text-xl">{me}</span>
         <span className="text-gold-200/30 mx-2">|</span>
         <span className="font-display text-gold-400 text-xl">{opp}</span>
         <span className="text-gold-200/60 ml-1">Opp</span>
       </div>
+      <LeaveButton code={code} slot={slot} onLeave={onLeave} />
     </div>
   )
 }

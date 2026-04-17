@@ -6,6 +6,7 @@ import LobbyScreen from './screens/LobbyScreen.jsx'
 import SettingScreen from './screens/SettingScreen.jsx'
 import MatchupScreen from './screens/MatchupScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
+import AbandonedScreen from './screens/AbandonedScreen.jsx'
 import ConfigMissingBanner from './components/ConfigMissingBanner.jsx'
 
 // localStorage, not sessionStorage — the latter is evicted by iOS/Android
@@ -76,6 +77,8 @@ export default function App() {
       return <MatchupScreen code={session.code} game={game} slot={slot} onLeave={leave} />
     case 'done':
       return <ResultsScreen code={session.code} game={game} slot={slot} onLeave={leave} />
+    case 'abandoned':
+      return <AbandonedScreen game={game} slot={slot} onLeave={leave} />
     default:
       return <div className="p-6 text-gold-400">Unknown game status: {game.status}</div>
   }

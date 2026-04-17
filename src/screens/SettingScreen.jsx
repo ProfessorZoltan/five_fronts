@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Button from '../components/Button.jsx'
+import LeaveButton from '../components/LeaveButton.jsx'
 import { CardSlot } from '../components/Card.jsx'
 import { lockIn } from '../firebase/game.js'
 import { evaluateHand } from '../game/evaluate.js'
@@ -17,7 +18,7 @@ import { SUIT_ORDER } from '../game/deck.js'
 
 function cardKey(c) { return `${c.rank}-${c.suit}` }
 
-export default function SettingScreen({ code, game, slot }) {
+export default function SettingScreen({ code, game, slot, onLeave }) {
   const me = game.players[slot]
   const myDeal = me?.hand || []
   const locked = me?.locked
@@ -123,16 +124,19 @@ export default function SettingScreen({ code, game, slot }) {
 
   return (
     <div className="min-h-screen flex flex-col pb-4">
-      <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur flex items-center justify-between p-3 border-b border-gold-600/20">
-        <div>
+      <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur flex items-center justify-between gap-2 p-3 border-b border-gold-600/20">
+        <div className="flex-1 min-w-0">
           <div className="text-gold-400 font-display text-lg leading-none">Setting Phase</div>
-          <div className="text-gold-200/60 text-xs">
+          <div className="text-gold-200/60 text-xs truncate">
             {placedCount} / 25 cards placed · 5 hands of 5
           </div>
         </div>
-        <Button onClick={() => setConfirmOpen(true)} disabled={!allPlaced || locked}>
-          Lock In
-        </Button>
+        <div className="flex items-center gap-1">
+          <LeaveButton code={code} slot={slot} onLeave={onLeave} />
+          <Button onClick={() => setConfirmOpen(true)} disabled={!allPlaced || locked}>
+            Lock In
+          </Button>
+        </div>
       </div>
 
       <div className="px-3 pt-2">

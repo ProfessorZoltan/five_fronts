@@ -298,6 +298,23 @@ function tallyWinner(rounds) {
   return 'draw'
 }
 
+// ---------- Leave ----------
+
+// Marks the game abandoned so the remaining player gets a clear signal instead
+// of being stuck. Best-effort — caller should clear their local session even
+// if this write fails.
+export async function leaveGame(code, slot) {
+  try {
+    await update(gameRef(code), {
+      status: 'abandoned',
+      abandonedBy: slot,
+      abandonedAt: Date.now(),
+    })
+  } catch (e) {
+    console.warn('leaveGame failed:', e)
+  }
+}
+
 // ---------- Rematch ----------
 
 export async function rematch(code) {

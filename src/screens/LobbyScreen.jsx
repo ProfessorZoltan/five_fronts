@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
+import LeaveButton from '../components/LeaveButton.jsx'
 
 export default function LobbyScreen({ code, game, slot, onLeave }) {
   const p1Here = !!game?.players?.p1
@@ -40,7 +41,7 @@ export default function LobbyScreen({ code, game, slot, onLeave }) {
           {p1Here && p2Here ? 'Dealing cards…' : 'Waiting for opponent…'}
         </div>
 
-        <Button variant="ghost" onClick={onLeave}>Leave</Button>
+        <LeaveButton code={code} slot={slot} onLeave={onLeave} />
       </div>
     </div>
   )
