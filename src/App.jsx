@@ -8,20 +8,23 @@ import MatchupScreen from './screens/MatchupScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import ConfigMissingBanner from './components/ConfigMissingBanner.jsx'
 
+// localStorage, not sessionStorage — the latter is evicted by iOS/Android
+// when the tab is backgrounded (e.g. incoming phone call), which kicked
+// players out mid-game. localStorage persists across tab eviction, browser
+// kills, reboots, and PWA relaunches.
 const SESSION_KEY = 'five_fronts_session'
 
 function loadSession() {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null') } catch { return null }
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') } catch { return null }
 }
 function saveSession(s) {
   try {
-    if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s))
-    else sessionStorage.removeItem(SESSION_KEY)
-  } catch { /* ignore */ }
+    if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s))
+    else localStorage.removeItem(SESSION_KEY)
+  } catch { /* private mode, quota errors — ignore */ }
 }
 
 export default function App() {
-  // session: { code, slot } once a game is joined/created; null at home.
   const [session, setSession] = useState(loadSession)
   const [game, setGame] = useState(null)
   const uid = getPlayerId()
@@ -32,13 +35,18 @@ export default function App() {
     if (!session?.code || !isConfigured) { setGame(null); return }
     const unsub = subscribeGame(session.code, g => {
       setGame(g)
-      // If the game was deleted or our slot vanished, kick back to home.
       if (!g) { setSession(null); return }
-      const mySlot = getMySlot(g, uid)
-      if (!mySlot) { /* spectator / refresh-glitch; keep existing slot */ }
+      const actualSlot = getMySlot(g, uid)
+      if (!actualSlot) {
+        // Our uid isn't a player in this game — don't squat on the session.
+        setSession(null)
+      } else if (actualSlot !== session.slot) {
+        // Defensive: keep the stored slot in sync with the source of truth.
+        setSession(s => s ? { ...s, slot: actualSlot } : s)
+      }
     })
     return unsub
-  }, [session?.code, uid])
+  }, [session?.code, uid, session?.slot])
 
   if (!isConfigured) {
     return <ConfigMissingBanner />
@@ -51,7 +59,7 @@ export default function App() {
   if (!game) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gold-400">
-        <div className="animate-pulseSoft">Connecting…</div>
+        <div className="animate-pulseSoft">Reconnecting…</div>
       </div>
     )
   }
