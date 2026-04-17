@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CardSlot, FlipCard } from '../components/Card.jsx'
 import Button from '../components/Button.jsx'
 import { markReadyForReveal } from '../firebase/game.js'
+import { orderCardsForDisplay } from '../game/evaluate.js'
 
 // Reveal flow (simpler v1):
 // - Show all 5 pairings stacked. The "current" one is expanded and in focus.
@@ -51,7 +52,26 @@ export default function RevealScreen({ code, game, slot }) {
         <Tally tally={tally} />
       </div>
 
+      {revealedResults.length > 0 && (
+        <div className="px-3 pt-2">
+          <div className="text-gold-200/60 text-xs mb-2">Revealed so far — newest on top</div>
+          <div className="space-y-2">
+            {revealedResults.slice().reverse().map((r) => (
+              <ResultCard
+                key={r.pairingIndex}
+                result={r}
+                slot={slot}
+                revealed
+                reorder
+                compact
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="p-3">
+        <div className="text-gold-200/60 text-xs mb-2">Now flipping</div>
         <ResultCard
           result={currentResult}
           slot={slot}
@@ -69,17 +89,6 @@ export default function RevealScreen({ code, game, slot }) {
           {myReady ? 'Waiting…' : 'Flip'}
         </Button>
       </div>
-
-      {revealedResults.length > 0 && (
-        <div className="px-3 pt-2 border-t border-gold-600/20 mt-2">
-          <div className="text-gold-200/60 text-xs mb-2">Previously revealed</div>
-          <div className="space-y-2">
-            {revealedResults.map((r, i) => (
-              <ResultCard key={i} result={r} slot={slot} revealed compact />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -100,7 +109,7 @@ function Tally({ tally }) {
   )
 }
 
-export function ResultCard({ result, slot, revealed, current = false, compact = false }) {
+export function ResultCard({ result, slot, revealed, current = false, compact = false, reorder = false }) {
   const myHand = slot === 'p1' ? result.p1Hand : result.p2Hand
   const oppHand = slot === 'p1' ? result.p2Hand : result.p1Hand
   const myRank = slot === 'p1' ? result.p1HandRank : result.p2HandRank
@@ -122,6 +131,7 @@ export function ResultCard({ result, slot, revealed, current = false, compact = 
         winHighlight={revealed && oppWon}
         loseDim={revealed && myWon}
         revealed={revealed}
+        reorder={reorder}
         compact={compact}
       />
       <div className="my-2 h-px bg-gold-600/20" />
@@ -132,14 +142,20 @@ export function ResultCard({ result, slot, revealed, current = false, compact = 
         winHighlight={revealed && myWon}
         loseDim={revealed && oppWon}
         revealed={revealed}
+        reorder={reorder}
         compact={compact}
       />
     </div>
   )
 }
 
-function HandRow({ label, cards, rank, winHighlight, loseDim, revealed, compact }) {
+function HandRow({ label, cards, rank, winHighlight, loseDim, revealed, compact, reorder }) {
   const size = compact ? 'xs' : 'sm'
+  // When `reorder` is true (history, results), rearrange into a hand-aware
+  // display order so the cards contributing to the hand's value sit on the
+  // left. Otherwise we leave the original slot positions intact (for clean
+  // flip animations on the current pairing).
+  const display = reorder ? orderCardsForDisplay(cards) : cards
   return (
     <div className="flex items-center gap-2">
       <div className="w-14 shrink-0">
@@ -147,11 +163,11 @@ function HandRow({ label, cards, rank, winHighlight, loseDim, revealed, compact 
         {rank && <div className={'text-[10px] ' + (winHighlight ? 'text-emerald-300' : 'text-gold-200/50')}>{rank}</div>}
       </div>
       <div className="flex gap-1 flex-1">
-        {cards.map((c, i) => (
-          <div key={i} className="flex-1 max-w-[18%]">
+        {display.map((c, i) => (
+          <div key={c.rank + '-' + c.suit + '-' + i} className="flex-1 max-w-[18%]">
             {c.faceUp
               ? <CardSlot card={c} size={size} highlighted={winHighlight} dimmed={loseDim} />
-              : <FlipCard card={c} revealed={revealed} size={size} highlighted={winHighlight} dimmed={loseDim} />
+              : <FlipCard card={c} revealed={revealed} size={size} highlighted={winHighlight} dimmed={loseDim} wasFaceDown />
             }
           </div>
         ))}

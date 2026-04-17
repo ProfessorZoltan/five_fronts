@@ -42,7 +42,7 @@ export default function ResultsScreen({ code, game, slot, onLeave }) {
         {results.map((r, i) => (
           <div key={i}>
             <div className="text-gold-200/60 text-xs mb-1">Pairing {i + 1}</div>
-            <ResultCard result={r} slot={slot} revealed compact />
+            <ResultCard result={r} slot={slot} revealed compact reorder />
           </div>
         ))}
       </div>

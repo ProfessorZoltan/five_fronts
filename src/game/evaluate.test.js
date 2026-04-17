@@ -1,5 +1,5 @@
 // Lightweight self-tests for evaluate.js. Run with: `node src/game/evaluate.test.js`
-import { evaluateHand, compareHands, HAND_LABELS } from './evaluate.js'
+import { evaluateHand, compareHands, orderCardsForDisplay, HAND_LABELS } from './evaluate.js'
 import { RANK_VALUE } from './deck.js'
 
 function card(rank, suit) {
@@ -90,6 +90,38 @@ assert(compareHands(suitA, suitB) === 'p1', 'suit tiebreaker fires only when ran
 const flushH = [card('A','hearts'), card('J','hearts'), card('9','hearts'), card('6','hearts'), card('3','hearts')]
 const flushC = [card('A','clubs'),  card('J','clubs'),  card('9','clubs'),  card('6','clubs'),  card('4','clubs')]
 assert(compareHands(flushH, flushC) === 'p2', 'last-card kicker breaks flush tie (4 > 3)')
+
+// --- orderCardsForDisplay tests ---
+
+function ranks(cards) { return cards.map(c => c.rank).join(',') }
+
+// High card: desc by value
+const hcOrder = orderCardsForDisplay([card('5','hearts'), card('A','spades'), card('3','clubs'), card('J','diamonds'), card('9','clubs')])
+assert(ranks(hcOrder) === 'A,J,9,5,3', 'high card reorders desc')
+
+// One pair: pair first, kickers desc
+const opOrder = orderCardsForDisplay([card('4','hearts'), card('K','spades'), card('7','clubs'), card('K','diamonds'), card('2','clubs')])
+assert(ranks(opOrder) === 'K,K,7,4,2', 'one pair: pair first, then kickers')
+
+// Two pair: high pair, low pair, kicker
+const tpOrder = orderCardsForDisplay([card('5','hearts'), card('A','spades'), card('5','clubs'), card('2','diamonds'), card('A','clubs')])
+assert(ranks(tpOrder) === 'A,A,5,5,2', 'two pair: higher pair first')
+
+// Full house: trips first, pair second
+const fhOrder = orderCardsForDisplay([card('4','hearts'), card('J','spades'), card('4','clubs'), card('J','diamonds'), card('J','clubs')])
+assert(ranks(fhOrder) === 'J,J,J,4,4', 'full house: trips first')
+
+// Quads: four of a kind first, kicker last
+const qOrder = orderCardsForDisplay([card('2','hearts'), card('7','spades'), card('7','clubs'), card('7','diamonds'), card('7','hearts')])
+assert(ranks(qOrder) === '7,7,7,7,2', 'quads first, kicker last')
+
+// Straight: sorted desc
+const strOrder = orderCardsForDisplay([card('9','hearts'), card('Q','spades'), card('10','clubs'), card('J','diamonds'), card('8','hearts')])
+assert(ranks(strOrder) === 'Q,J,10,9,8', 'straight: sorted desc')
+
+// Wheel: 5-high straight, ace moves to end
+const wheelOrder = orderCardsForDisplay([card('A','spades'), card('2','hearts'), card('3','clubs'), card('4','diamonds'), card('5','spades')])
+assert(ranks(wheelOrder) === '5,4,3,2,A', 'wheel: ace goes last')
 
 // Summary
 console.log(`\n${passed} passed, ${failed} failed`)

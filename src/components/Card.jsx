@@ -33,13 +33,14 @@ export function CardBack({ className = '', size = 'md' }) {
   )
 }
 
-export function CardFace({ card, dimmed = false, highlighted = false, size = 'md', className = '' }) {
+export function CardFace({ card, dimmed = false, highlighted = false, wasFaceDown = false, size = 'md', className = '' }) {
   const s = sizeClasses(size)
   const color = SUIT_COLOR[card.suit]
   return (
     <div
       className={[
-        'relative rounded-lg shadow-md bg-[#fbf6e6] border border-neutral-300',
+        'relative rounded-lg shadow-md bg-[#fbf6e6] border',
+        wasFaceDown ? 'border-felt-900 ring-2 ring-felt-900/70' : 'border-neutral-300',
         dimmed ? 'opacity-40' : '',
         highlighted ? 'ring-4 ring-emerald-400 shadow-emerald-400/40' : '',
         s.root,
@@ -57,6 +58,13 @@ export function CardFace({ card, dimmed = false, highlighted = false, size = 'md
       <div className={`absolute inset-0 flex items-center justify-center ${color} ${s.center} no-select`}>
         {SUIT_GLYPH[card.suit]}
       </div>
+      {wasFaceDown && (
+        <div className="absolute top-0 left-0 right-0 flex justify-center">
+          <div className="bg-felt-900 text-gold-400 text-[0.5rem] font-bold tracking-widest px-1.5 py-0.5 rounded-b-md shadow">
+            HIDDEN
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -72,6 +80,7 @@ export function CardSlot({
   hidden = false,
   dimmed = false,
   highlighted = false,
+  wasFaceDown = false,
   size = 'md',
   onClick,
   selected = false,
@@ -127,14 +136,14 @@ export function CardSlot({
 
   return (
     <div onClick={onClick} className={base + ' ' + className}>
-      <CardFace card={card} dimmed={dimmed} highlighted={highlighted} size={size} />
+      <CardFace card={card} dimmed={dimmed} highlighted={highlighted} wasFaceDown={wasFaceDown} size={size} />
       {selected && <div className="absolute inset-0 rounded-lg ring-2 ring-gold-400 pointer-events-none" />}
     </div>
   )
 }
 
 // Flip-capable card: shows back until `revealed`, then flips to face.
-export function FlipCard({ card, revealed, highlighted = false, dimmed = false, size = 'md', className = '' }) {
+export function FlipCard({ card, revealed, highlighted = false, dimmed = false, wasFaceDown = false, size = 'md', className = '' }) {
   const s = sizeClasses(size)
   return (
     <div className={'flip-scene ' + s.root + ' ' + className}>
@@ -143,7 +152,7 @@ export function FlipCard({ card, revealed, highlighted = false, dimmed = false, 
           <CardBack size={size} className="w-full h-full" />
         </div>
         <div className="flip-face back w-full h-full">
-          <CardFace card={card} size={size} highlighted={highlighted} dimmed={dimmed} className="w-full h-full" />
+          <CardFace card={card} size={size} highlighted={highlighted} dimmed={dimmed} wasFaceDown={wasFaceDown} className="w-full h-full" />
         </div>
       </div>
     </div>

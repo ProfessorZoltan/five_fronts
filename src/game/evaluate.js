@@ -166,6 +166,46 @@ export function evaluateHand(cards) {
   }
 }
 
+// Reorder 5 cards for display so the cards that contribute to the hand's
+// value come first (leftmost). For grouped hands (pairs, trips, quads, full
+// house) we follow the tiebreaker order from evaluateHand. For straights
+// (including royal/straight flush) we sort by value descending, handling the
+// A-2-3-4-5 wheel by moving the ace to the right end.
+export function orderCardsForDisplay(cards) {
+  const ev = evaluateHand(cards)
+  const sortDesc = arr => arr.slice().sort((a, b) => b.value - a.value)
+
+  // Royal flush, straight flush, straight: sorted descending, with wheel fixup.
+  if (ev.rank === 1 || ev.rank === 2 || ev.rank === 6) {
+    const sorted = sortDesc(cards)
+    if (ev.tiebreakers[0] === 5) {
+      const aceIdx = sorted.findIndex(c => c.value === 14)
+      if (aceIdx !== -1) {
+        const [ace] = sorted.splice(aceIdx, 1)
+        sorted.push(ace)
+      }
+    }
+    return sorted
+  }
+
+  // All other hands: pull cards out in tiebreaker order (grouped hands get
+  // their groups placed together automatically). Then append any leftovers.
+  const keyOf = c => `${c.rank}-${c.suit}`
+  const out = []
+  const used = new Set()
+  for (const v of ev.tiebreakers) {
+    for (const c of cards) {
+      if (c.value === v && !used.has(keyOf(c))) {
+        out.push(c)
+        used.add(keyOf(c))
+      }
+    }
+  }
+  const remaining = cards.filter(c => !used.has(keyOf(c)))
+  out.push(...sortDesc(remaining))
+  return out
+}
+
 // Compare two 5-card hands.
 // Returns 'p1', 'p2', or 'draw'.
 export function compareHands(h1, h2) {
