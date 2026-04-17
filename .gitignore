@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+.vite
+*.log
+_build.log
+_install.log
+_test.log
+_probe.txt
+_install_tail.txt
+_git.log
+.firebase
+.claude/

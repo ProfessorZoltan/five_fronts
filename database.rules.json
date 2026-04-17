@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "games": {
+      "$code": {
+        ".read": true,
+        ".write": true,
+        "players": {
+          "p1": {
+            "hand": {
+              ".read": "root.child('games').child($code).child('players').child('p1').child('uid').val() === auth.uid || auth == null"
+            }
+          },
+          "p2": {
+            "hand": {
+              ".read": "root.child('games').child($code).child('players').child('p2').child('uid').val() === auth.uid || auth == null"
+            }
+          }
+        }
+      }
+    }
+  }
+}
