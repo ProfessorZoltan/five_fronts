@@ -5,6 +5,7 @@ import { CardBack, CardSlot } from '../components/Card.jsx'
 import ResultCard from '../components/ResultCard.jsx'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
 import { playHand, respondToHand, readyForNextRound } from '../firebase/game.js'
+import { getVariant } from '../game/variants.js'
 
 // One screen for the whole matching phase — it flips between three substates:
 //   play    -> active player picks a hand AND 3 face-up cards
@@ -12,6 +13,7 @@ import { playHand, respondToHand, readyForNextRound } from '../firebase/game.js'
 //   reveal  -> both hands fully shown, face-down cards flip, winner highlighted
 
 export default function MatchupScreen({ code, game, slot, onLeave }) {
+  const variant = getVariant(game?.variant)
   const opp = slot === 'p1' ? 'p2' : 'p1'
   const rounds = game.rounds || []
   const usedMine = new Set(rounds.map(r => slot === 'p1' ? r.p1HandId : r.p2HandId))
@@ -19,14 +21,14 @@ export default function MatchupScreen({ code, game, slot, onLeave }) {
 
   const myHands = game.players[slot]?.hands || []
   const myRemainingIds = myHands.map(h => h.id).filter(id => !usedMine.has(id))
-  const oppRemainingCount = 5 - usedOpp.size
+  const oppRemainingCount = variant.handCount - usedOpp.size
 
   const isMyTurn = game.currentPlayer === slot
   const state = game.roundState  // 'play' | 'respond' | 'reveal'
 
   return (
     <div className="min-h-screen flex flex-col pb-4">
-      <Header game={game} slot={slot} code={code} onLeave={onLeave} />
+      <Header game={game} slot={slot} code={code} onLeave={onLeave} variant={variant} />
 
       {state === 'play' && (isMyTurn
         ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} />
@@ -49,7 +51,7 @@ export default function MatchupScreen({ code, game, slot, onLeave }) {
   )
 }
 
-function Header({ game, slot, code, onLeave }) {
+function Header({ game, slot, code, onLeave, variant }) {
   const rounds = game.rounds || []
   let me = 0, opp = 0
   for (const r of rounds) {
@@ -60,7 +62,7 @@ function Header({ game, slot, code, onLeave }) {
   return (
     <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur px-4 py-3 border-b border-gold-600/20 flex items-center justify-between gap-2">
       <div className="flex-1 min-w-0">
-        <div className="text-gold-400 font-display text-lg leading-none">Round {n} of 5</div>
+        <div className="text-gold-400 font-display text-lg leading-none">Round {n} of {variant.handCount}</div>
         <div className="text-gold-200/60 text-xs truncate">
           {game.currentPlayer === slot ? 'Your turn' : 'Opponent\'s turn'}
         </div>

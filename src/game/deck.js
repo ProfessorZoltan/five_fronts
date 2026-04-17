@@ -42,13 +42,14 @@ export function shuffle(deck, seed) {
   return a
 }
 
-// 52 cards -> two 25-card hands, 2 cards set aside (discarded).
-export function dealFromSeed(seed) {
+// 52 cards -> two cardsPerPlayer-sized piles, remainder burned.
+// Defaults to 25 (standard variant). Three-hand uses 18.
+export function dealFromSeed(seed, cardsPerPlayer = 25) {
   const deck = shuffle(buildDeck(), seed)
   return {
-    p1: deck.slice(0, 25),
-    p2: deck.slice(25, 50),
-    burned: deck.slice(50, 52),
+    p1: deck.slice(0, cardsPerPlayer),
+    p2: deck.slice(cardsPerPlayer, 2 * cardsPerPlayer),
+    burned: deck.slice(2 * cardsPerPlayer),
   }
 }
 

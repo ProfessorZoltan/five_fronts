@@ -30,13 +30,15 @@ import {
 import { getDb, getPlayerId } from './client.js'
 import { dealFromSeed, randomSeed, randomGameCode } from '../game/deck.js'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
+import { getVariant, VARIANTS } from '../game/variants.js'
 
 const gameRef = code => ref(getDb(), `games/${code}`)
 const childRef = (code, path) => ref(getDb(), `games/${code}/${path}`)
 
 // ---------- Create / Join ----------
 
-export async function createGame() {
+export async function createGame(variantId = 'standard') {
+  if (!VARIANTS[variantId]) throw new Error(`Unknown variant: ${variantId}`)
   const uid = getPlayerId()
   const db = getDb()
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -46,6 +48,7 @@ export async function createGame() {
       return {
         status: 'waiting',
         seed: randomSeed(),
+        variant: variantId,
         createdAt: Date.now(),
         firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
         players: {
@@ -86,7 +89,8 @@ async function dealIfReady(code) {
   if (g.status !== 'waiting') return
   if (!g.players?.p1 || !g.players?.p2) return
 
-  const { p1, p2 } = dealFromSeed(g.seed)
+  const variant = getVariant(g.variant)
+  const { p1, p2 } = dealFromSeed(g.seed, variant.cardsDealt)
   await update(gameRef(code), {
     'players/p1/hand': p1,
     'players/p2/hand': p2,
@@ -96,10 +100,12 @@ async function dealIfReady(code) {
 
 // ---------- Setting phase ----------
 
-// hands: array of 5 { id, cards[5 {rank, suit, value}] }
+// hands: array of handCount { id, cards[5 {rank, suit, value}] }
 // Face-up decisions are NOT made here anymore — those happen per-round during matching.
 export async function lockIn(code, slot, hands) {
-  validateHands(hands)
+  const snapPre = await get(gameRef(code))
+  const variantPre = getVariant(snapPre.val()?.variant)
+  validateHands(hands, variantPre)
   await update(gameRef(code), {
     [`players/${slot}/hands`]: hands,
     [`players/${slot}/locked`]: true,
@@ -121,9 +127,9 @@ export async function lockIn(code, slot, hands) {
   }
 }
 
-function validateHands(hands) {
-  if (!Array.isArray(hands) || hands.length !== 5) {
-    throw new Error('Must have exactly 5 hands.')
+function validateHands(hands, variant) {
+  if (!Array.isArray(hands) || hands.length !== variant.handCount) {
+    throw new Error(`Must have exactly ${variant.handCount} hands.`)
   }
   const seen = new Set()
   for (const h of hands) {
@@ -136,7 +142,8 @@ function validateHands(hands) {
       seen.add(k)
     }
   }
-  if (seen.size !== 25) throw new Error('Must place all 25 cards.')
+  const needed = variant.handCount * 5
+  if (seen.size !== needed) throw new Error(`Must place all ${needed} cards.`)
 }
 
 // ---------- Matchup phase ----------
@@ -229,7 +236,8 @@ export async function readyForNextRound(code, slot) {
 
   const rounds = [...(g.rounds || []), newRound]
   const nextRoundIdx = (g.currentRound ?? 0) + 1
-  const isLast = nextRoundIdx >= 5
+  const variant = getVariant(g.variant)
+  const isLast = nextRoundIdx >= variant.handCount
 
   if (isLast) {
     await update(gameRef(code), {
@@ -320,10 +328,13 @@ export async function leaveGame(code, slot) {
 export async function rematch(code) {
   const snap = await get(gameRef(code))
   const g = snap.val()
-  const deal = dealFromSeed(randomSeed())
+  const variant = getVariant(g.variant)
+  const seed = randomSeed()
+  const deal = dealFromSeed(seed, variant.cardsDealt)
   await set(gameRef(code), {
     status: 'setting',
-    seed: randomSeed(),
+    seed,
+    variant: variant.id,
     createdAt: Date.now(),
     firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
     players: {

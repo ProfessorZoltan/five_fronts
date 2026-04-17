@@ -5,10 +5,12 @@ import { CardSlot } from '../components/Card.jsx'
 import { lockIn } from '../firebase/game.js'
 import { evaluateHand } from '../game/evaluate.js'
 import { SUIT_ORDER } from '../game/deck.js'
+import { getVariant } from '../game/variants.js'
 
-// Arrange 25 cards into 5 hands of 5. No face-up decisions here — those
-// happen per-round during the matching phase (you pick 3 face-up when you
-// play or respond with a hand).
+// Arrange dealt cards into the variant's hand count. No face-up decisions
+// here — those happen per-round during matching. For variants where extra
+// cards are dealt (e.g. 3-hand: 18 dealt, 15 placed), the leftover cards
+// stay in the reserve and are discarded at lock-in.
 //
 // Interaction (tap-based):
 // - Tap a reserve card -> selects it.
@@ -19,6 +21,7 @@ import { SUIT_ORDER } from '../game/deck.js'
 function cardKey(c) { return `${c.rank}-${c.suit}` }
 
 export default function SettingScreen({ code, game, slot, onLeave }) {
+  const variant = getVariant(game?.variant)
   const me = game.players[slot]
   const myDeal = me?.hand || []
   const locked = me?.locked
@@ -31,8 +34,12 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
+  const targetCardCount = variant.handCount * 5
+
   const hands = useMemo(() => {
-    const out = [0,1,2,3,4].map(i => ({ id: i, cards: [null,null,null,null,null] }))
+    const out = Array.from({ length: variant.handCount }, (_, i) => ({
+      id: i, cards: [null, null, null, null, null],
+    }))
     const byKey = new Map(myDeal.map(c => [cardKey(c), c]))
     for (const [k, p] of Object.entries(placements)) {
       const card = byKey.get(k)
@@ -41,7 +48,7 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
       }
     }
     return out
-  }, [placements, myDeal])
+  }, [placements, myDeal, variant.handCount])
 
   const reserveCards = useMemo(() => {
     return myDeal
@@ -53,7 +60,8 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
   }, [myDeal, placements])
 
   const placedCount = myDeal.length - reserveCards.length
-  const allPlaced = placedCount === 25
+  const allPlaced = placedCount === targetCardCount
+  const discardCount = allPlaced ? reserveCards.length : 0
 
   function selectCard(k) {
     setSelectedKey(prev => prev === k ? null : k)
@@ -128,7 +136,7 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
         <div className="flex-1 min-w-0">
           <div className="text-gold-400 font-display text-lg leading-none">Setting Phase</div>
           <div className="text-gold-200/60 text-xs truncate">
-            {placedCount} / 25 cards placed · 5 hands of 5
+            {placedCount} / {targetCardCount} placed · {variant.handCount} hands of 5
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -153,7 +161,13 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
               />
             ))}
           </div>
-          <Reserve cards={reserveCards} selectedKey={selectedKey} onCardTap={selectCard} />
+          <Reserve
+            cards={reserveCards}
+            selectedKey={selectedKey}
+            onCardTap={selectCard}
+            allPlaced={allPlaced}
+            discardCount={discardCount}
+          />
         </div>
       </div>
 
@@ -161,7 +175,9 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
         <Modal onClose={() => !submitting && setConfirmOpen(false)}>
           <div className="text-lg font-semibold text-gold-100 mb-2">Lock in your hands?</div>
           <div className="text-gold-200/80 text-sm mb-4">
-            You'll choose which cards to turn face-up when you play each hand during matching.
+            {discardCount > 0
+              ? `${discardCount} unplaced card${discardCount === 1 ? '' : 's'} will be discarded. You'll choose which cards to turn face-up when you play each hand during matching.`
+              : 'You\'ll choose which cards to turn face-up when you play each hand during matching.'}
           </div>
           {error && <div className="text-red-300 text-sm mb-2">{error}</div>}
           <div className="flex gap-2 justify-end">
@@ -204,7 +220,7 @@ function HandRow({ hand, index, selectedKey, onSlotTap, onCardTap }) {
   )
 }
 
-function Reserve({ cards, selectedKey, onCardTap }) {
+function Reserve({ cards, selectedKey, onCardTap, allPlaced, discardCount }) {
   if (cards.length === 0) {
     return (
       <div className="mt-3 px-4 py-3 rounded-xl bg-felt-800/60 border border-gold-600/20 text-center text-gold-200/50 text-sm">
@@ -212,10 +228,15 @@ function Reserve({ cards, selectedKey, onCardTap }) {
       </div>
     )
   }
+  // When all hand slots are filled but cards remain, those leftovers are
+  // headed for the discard pile at lock-in.
+  const willBeDiscarded = allPlaced && discardCount > 0
   return (
     <div className="mt-3">
       <div className="text-gold-200/60 text-xs mb-1">
-        Your cards — strongest first. Tap one, then tap a slot above.
+        {willBeDiscarded
+          ? `These ${discardCount} card${discardCount === 1 ? '' : 's'} will be discarded — tap one then a hand card to swap.`
+          : 'Your cards — strongest first. Tap one, then tap a slot above.'}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {cards.map(c => {
@@ -225,6 +246,7 @@ function Reserve({ cards, selectedKey, onCardTap }) {
               key={k}
               card={{ ...c, faceUp: true }}
               size="sm"
+              dimmed={willBeDiscarded}
               selected={selectedKey === k}
               onClick={() => onCardTap(k)}
             />

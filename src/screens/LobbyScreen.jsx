@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
 import LeaveButton from '../components/LeaveButton.jsx'
+import { getVariant } from '../game/variants.js'
 
 export default function LobbyScreen({ code, game, slot, onLeave }) {
   const p1Here = !!game?.players?.p1
@@ -30,6 +31,12 @@ export default function LobbyScreen({ code, game, slot, onLeave }) {
           <div className="text-gold-200/60 text-xs mt-2 h-4">
             {copied ? 'Copied!' : 'Tap to copy'}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-gold-600/20 bg-felt-800/40 px-4 py-3">
+          <div className="text-gold-200/60 uppercase tracking-widest text-[10px] mb-1">Variant</div>
+          <div className="text-gold-100 font-semibold">{getVariant(game?.variant).name}</div>
+          <div className="text-gold-200/60 text-xs mt-0.5">{getVariant(game?.variant).tagline}</div>
         </div>
 
         <div className="space-y-2">
