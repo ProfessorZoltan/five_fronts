@@ -140,19 +140,21 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
       </div>
 
       <div className="px-3 pt-2">
-        <div className="space-y-2">
-          {hands.map((h, hi) => (
-            <HandRow
-              key={h.id}
-              hand={h}
-              index={hi}
-              selectedKey={selectedKey}
-              onSlotTap={placeInSlot}
-              onCardTap={onPlacedCardTap}
-            />
-          ))}
+        <div className="max-w-xl mx-auto">
+          <div className="space-y-4">
+            {hands.map((h, hi) => (
+              <HandRow
+                key={h.id}
+                hand={h}
+                index={hi}
+                selectedKey={selectedKey}
+                onSlotTap={placeInSlot}
+                onCardTap={onPlacedCardTap}
+              />
+            ))}
+          </div>
+          <Reserve cards={reserveCards} selectedKey={selectedKey} onCardTap={selectCard} />
         </div>
-        <Reserve cards={reserveCards} selectedKey={selectedKey} onCardTap={selectCard} />
       </div>
 
       {confirmOpen && (
@@ -179,24 +181,23 @@ function HandRow({ hand, index, selectedKey, onSlotTap, onCardTap }) {
     : ''
   return (
     <div className="flex items-center gap-2">
-      <div className="w-10 text-center">
+      <div className="w-10 text-center shrink-0">
         <div className="text-gold-400 font-display text-xl leading-none">{index + 1}</div>
         <div className="text-gold-200/60 text-[10px] leading-tight mt-1 h-6">{rankLabel}</div>
       </div>
-      <div className="flex gap-1.5 flex-1">
+      <div className="flex gap-1">
         {hand.cards.map((c, si) => (
-          <div key={si} className="flex-1 max-w-[18%]">
-            <CardSlot
-              card={c ? { ...c, faceUp: true } : undefined}
-              size="sm"
-              label={c ? undefined : 'Empty'}
-              selected={c ? cardKey(c) === selectedKey : false}
-              onClick={() => {
-                if (c) onCardTap(cardKey(c))
-                else onSlotTap(index, si)
-              }}
-            />
-          </div>
+          <CardSlot
+            key={si}
+            card={c ? { ...c, faceUp: true } : undefined}
+            size="sm"
+            label={c ? undefined : 'Empty'}
+            selected={c ? cardKey(c) === selectedKey : false}
+            onClick={() => {
+              if (c) onCardTap(cardKey(c))
+              else onSlotTap(index, si)
+            }}
+          />
         ))}
       </div>
     </div>
