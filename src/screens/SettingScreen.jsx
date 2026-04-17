@@ -3,6 +3,7 @@ import Button from '../components/Button.jsx'
 import { CardSlot } from '../components/Card.jsx'
 import { lockIn } from '../firebase/game.js'
 import { evaluateHand } from '../game/evaluate.js'
+import { SUIT_ORDER } from '../game/deck.js'
 
 // Arrange 25 cards into 5 hands of 5. No face-up decisions here — those
 // happen per-round during the matching phase (you pick 3 face-up when you
@@ -42,7 +43,12 @@ export default function SettingScreen({ code, game, slot }) {
   }, [placements, myDeal])
 
   const reserveCards = useMemo(() => {
-    return myDeal.filter(c => !placements[cardKey(c)])
+    return myDeal
+      .filter(c => !placements[cardKey(c)])
+      .slice()
+      .sort((a, b) =>
+        (b.value - a.value) || (SUIT_ORDER[b.suit] - SUIT_ORDER[a.suit])
+      )
   }, [myDeal, placements])
 
   const placedCount = myDeal.length - reserveCards.length
