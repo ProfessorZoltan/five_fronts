@@ -165,6 +165,8 @@ export async function playHand(code, slot, handId, faceUp) {
   const variant = getVariant(g.variant)
   const isLast = (g.currentRound ?? 0) >= variant.handCount - 1
 
+  assertJokerTiming(g, slot, handId, variant)
+
   // On the last round the face-up choice is skipped — everything reveals.
   const effectiveFaceUp = isLast ? [true, true, true, true, true] : faceUp
   assertFaceUpValid(effectiveFaceUp, !isLast)
@@ -193,6 +195,9 @@ export async function respondToHand(code, slot, handId) {
   const used = usedHandIds(g.rounds || [], slot)
   if (used.has(handId)) throw new Error('Hand already used.')
 
+  const variant = getVariant(g.variant)
+  assertJokerTiming(g, slot, handId, variant)
+
   const baseHand = g.players[slot].hands[handId].cards
   const cards = baseHand.map(c => ({ ...c, faceUp: true }))
 
@@ -201,6 +206,33 @@ export async function respondToHand(code, slot, handId) {
     roundState: 'reveal',
     roundReady: { p1: false, p2: false },
   })
+}
+
+// Cannon Fodder constraint: a hand containing a Joker cannot be played in the
+// final round. So on the last round the chosen hand must not have a Joker,
+// and on the second-to-last round the player must play their Joker hand if
+// they still hold one (otherwise it would be trapped for the final round).
+function assertJokerTiming(g, slot, handId, variant) {
+  if (g.cannonFodder !== true) return
+  const hands = g.players[slot].hands
+  const chosenHasJoker = hands[handId].cards.some(isJoker)
+  const cr = g.currentRound ?? 0
+  const isLast = cr >= variant.handCount - 1
+  const isSecondToLast = cr === variant.handCount - 2
+
+  if (isLast && chosenHasJoker) {
+    throw new Error('A hand with a Joker cannot be played as the last hand.')
+  }
+
+  if (isSecondToLast && !chosenHasJoker) {
+    const used = usedHandIds(g.rounds || [], slot)
+    const remainingHasJoker = hands.some(h =>
+      !used.has(h.id) && h.id !== handId && h.cards.some(isJoker)
+    )
+    if (remainingHasJoker) {
+      throw new Error('You must play your Joker hand this round — it can\'t be saved for the final round.')
+    }
+  }
 }
 
 // Called when a player taps "Continue" on the reveal pane. When both players

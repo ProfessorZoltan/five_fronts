@@ -6,6 +6,39 @@ import ResultCard from '../components/ResultCard.jsx'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
 import { playHand, respondToHand, readyForNextRound } from '../firebase/game.js'
 import { getVariant } from '../game/variants.js'
+import { isJoker } from '../game/deck.js'
+
+const handHasJoker = hand => hand?.cards?.some(isJoker)
+
+// Compute which remaining hand IDs are currently playable and whether the
+// player is forced to play their Joker hand this round (Cannon Fodder rule:
+// a Joker hand cannot be saved for the final round).
+function computePlayable({ myHands, myRemainingIds, variant, currentRound, cannonFodder }) {
+  const remainingIds = myRemainingIds
+  if (!cannonFodder) {
+    return { playableIds: remainingIds, jokerForced: false }
+  }
+  const isLast = currentRound >= variant.handCount - 1
+  const isSecondToLast = currentRound === variant.handCount - 2
+  const jokerHandIds = new Set(myHands.filter(handHasJoker).map(h => h.id))
+  const jokerRemaining = remainingIds.some(id => jokerHandIds.has(id))
+
+  if (isLast) {
+    // The Joker hand can never be played as the last hand; filter it out.
+    return {
+      playableIds: remainingIds.filter(id => !jokerHandIds.has(id)),
+      jokerForced: false,
+    }
+  }
+  if (isSecondToLast && jokerRemaining) {
+    // Must play the Joker hand this round.
+    return {
+      playableIds: remainingIds.filter(id => jokerHandIds.has(id)),
+      jokerForced: true,
+    }
+  }
+  return { playableIds: remainingIds, jokerForced: false }
+}
 
 // One screen for the whole matching phase — it flips between three substates:
 //   play    -> active player picks a hand AND 3 face-up cards (all face-up on last round)
@@ -31,12 +64,12 @@ export default function MatchupScreen({ code, game, slot, onLeave }) {
       <Header game={game} slot={slot} code={code} onLeave={onLeave} variant={variant} />
 
       {state === 'play' && (isMyTurn
-        ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} variant={variant} currentRound={game.currentRound ?? 0} />
+        ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} variant={variant} currentRound={game.currentRound ?? 0} cannonFodder={game.cannonFodder === true} />
         : <WaitingView message="Opponent is choosing a hand to play…" oppRemainingCount={oppRemainingCount} />
       )}
 
       {state === 'respond' && (isMyTurn
-        ? <RespondView code={code} slot={slot} game={game} myHands={myHands} myRemainingIds={myRemainingIds} />
+        ? <RespondView code={code} slot={slot} game={game} myHands={myHands} myRemainingIds={myRemainingIds} variant={variant} currentRound={game.currentRound ?? 0} cannonFodder={game.cannonFodder === true} />
         : <WaitingOnResponseView game={game} oppRemainingCount={oppRemainingCount} />
       )}
 
@@ -81,19 +114,23 @@ function Header({ game, slot, code, onLeave, variant }) {
 
 // ---------- Play view (your turn to play a hand) ----------
 
-function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound }) {
+function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound, cannonFodder }) {
   const isLastRound = currentRound >= variant.handCount - 1
+  const { playableIds, jokerForced } = computePlayable({
+    myHands, myRemainingIds, variant, currentRound, cannonFodder,
+  })
   const [pickedHandId, setPickedHandId] = useState(null)
   const [faceUp, setFaceUp] = useState([false, false, false, false, false])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  // Auto-pick when only one hand remains (always the case in the final round).
+  // Auto-pick when only one PLAYABLE hand remains (covers final round + the
+  // second-to-last forced-Joker case).
   useEffect(() => {
-    if (pickedHandId == null && myRemainingIds.length === 1) {
-      setPickedHandId(myRemainingIds[0])
+    if (pickedHandId == null && playableIds.length === 1) {
+      setPickedHandId(playableIds[0])
     }
-  }, [pickedHandId, myRemainingIds])
+  }, [pickedHandId, playableIds])
 
   const pickedHand = pickedHandId != null ? myHands.find(h => h.id === pickedHandId) : null
   const faceUpCount = faceUp.filter(Boolean).length
@@ -126,10 +163,18 @@ function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound }
       {pickedHand == null ? (
         <div>
           <div className="text-gold-200/80 mb-2">Choose a hand to play</div>
+          {jokerForced && (
+            <div className="mb-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-amber-200 text-xs">
+              ★ Your Joker hand can't be saved for the final round. You must play it this round.
+            </div>
+          )}
           <div className="space-y-2">
             {myHands.map(h => {
-              const disabled = !myRemainingIds.includes(h.id)
-              const label = (() => { try { return evaluateHand(h.cards).label } catch { return '' } })()
+              const usedUp = !myRemainingIds.includes(h.id)
+              const playable = playableIds.includes(h.id)
+              const disabled = usedUp || !playable
+              const statusLabel = usedUp ? 'used' : !playable ? 'locked' : ''
+              const handLabel = (() => { try { return evaluateHand(h.cards).label } catch { return '' } })()
               return (
                 <button
                   key={h.id}
@@ -144,7 +189,7 @@ function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound }
                 >
                   <div className="w-10 text-center">
                     <div className="text-gold-400 font-display leading-none">{h.id + 1}</div>
-                    <div className="text-[10px] text-gold-200/60 mt-0.5 h-3">{disabled ? 'used' : label}</div>
+                    <div className="text-[10px] text-gold-200/60 mt-0.5 h-3">{statusLabel || handLabel}</div>
                   </div>
                   <div className="flex gap-1 flex-1">
                     {h.cards.map((c, i) => (
@@ -185,7 +230,7 @@ function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound }
             <Button
               variant="ghost"
               onClick={() => { setPickedHandId(null); setFaceUp([false,false,false,false,false]) }}
-              disabled={busy || myRemainingIds.length === 1}
+              disabled={busy || playableIds.length === 1}
             >
               Change hand
             </Button>
@@ -248,17 +293,20 @@ function WaitingOnResponseView({ game, oppRemainingCount }) {
 
 // ---------- Respond view (your turn to respond to opponent's play) ----------
 
-function RespondView({ code, slot, game, myHands, myRemainingIds }) {
+function RespondView({ code, slot, game, myHands, myRemainingIds, variant, currentRound, cannonFodder }) {
   const offer = game.currentOffer
+  const { playableIds, jokerForced } = computePlayable({
+    myHands, myRemainingIds, variant, currentRound, cannonFodder,
+  })
   const [pickedHandId, setPickedHandId] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (pickedHandId == null && myRemainingIds.length === 1) {
-      setPickedHandId(myRemainingIds[0])
+    if (pickedHandId == null && playableIds.length === 1) {
+      setPickedHandId(playableIds[0])
     }
-  }, [pickedHandId, myRemainingIds])
+  }, [pickedHandId, playableIds])
 
   const pickedHand = pickedHandId != null ? myHands.find(h => h.id === pickedHandId) : null
 
@@ -289,10 +337,18 @@ function RespondView({ code, slot, game, myHands, myRemainingIds }) {
       {pickedHand == null ? (
         <div>
           <div className="text-gold-200/80 mb-2">Choose a hand to respond with</div>
+          {jokerForced && (
+            <div className="mb-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-amber-200 text-xs">
+              ★ Your Joker hand can't be saved for the final round. You must play it this round.
+            </div>
+          )}
           <div className="space-y-2">
             {myHands.map(h => {
-              const disabled = !myRemainingIds.includes(h.id)
-              const label = (() => { try { return evaluateHand(h.cards).label } catch { return '' } })()
+              const usedUp = !myRemainingIds.includes(h.id)
+              const playable = playableIds.includes(h.id)
+              const disabled = usedUp || !playable
+              const statusLabel = usedUp ? 'used' : !playable ? 'locked' : ''
+              const handLabel = (() => { try { return evaluateHand(h.cards).label } catch { return '' } })()
               return (
                 <button
                   key={h.id}
@@ -307,7 +363,7 @@ function RespondView({ code, slot, game, myHands, myRemainingIds }) {
                 >
                   <div className="w-10 text-center">
                     <div className="text-gold-400 font-display leading-none">{h.id + 1}</div>
-                    <div className="text-[10px] text-gold-200/60 mt-0.5 h-3">{disabled ? 'used' : label}</div>
+                    <div className="text-[10px] text-gold-200/60 mt-0.5 h-3">{statusLabel || handLabel}</div>
                   </div>
                   <div className="flex gap-1 flex-1">
                     {h.cards.map((c, i) => (
@@ -338,7 +394,7 @@ function RespondView({ code, slot, game, myHands, myRemainingIds }) {
             <Button
               variant="ghost"
               onClick={() => setPickedHandId(null)}
-              disabled={busy || myRemainingIds.length === 1}
+              disabled={busy || playableIds.length === 1}
             >
               Change hand
             </Button>

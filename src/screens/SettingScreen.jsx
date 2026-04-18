@@ -149,6 +149,13 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
 
       <div className="px-3 pt-2">
         <div className="max-w-xl mx-auto">
+          {game?.cannonFodder && (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200 text-xs">
+              ★ Cannon Fodder: your Joker is in your pool. You can place it in any hand
+              or leave it unplaced to discard it. A hand that contains the Joker can't
+              be played as the final hand — you'll need to play it earlier.
+            </div>
+          )}
           <div className="space-y-4">
             {hands.map((h, hi) => (
               <HandRow
