@@ -8,8 +8,8 @@ import { playHand, respondToHand, readyForNextRound } from '../firebase/game.js'
 import { getVariant } from '../game/variants.js'
 
 // One screen for the whole matching phase — it flips between three substates:
-//   play    -> active player picks a hand AND 3 face-up cards
-//   respond -> other player sees offered 3 face-up cards, picks a response + face-ups
+//   play    -> active player picks a hand AND 3 face-up cards (all face-up on last round)
+//   respond -> other player sees offered face-up cards, picks a response (all face-up)
 //   reveal  -> both hands fully shown, face-down cards flip, winner highlighted
 
 export default function MatchupScreen({ code, game, slot, onLeave }) {
@@ -31,7 +31,7 @@ export default function MatchupScreen({ code, game, slot, onLeave }) {
       <Header game={game} slot={slot} code={code} onLeave={onLeave} variant={variant} />
 
       {state === 'play' && (isMyTurn
-        ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} />
+        ? <PlayView code={code} slot={slot} myHands={myHands} myRemainingIds={myRemainingIds} variant={variant} currentRound={game.currentRound ?? 0} />
         : <WaitingView message="Opponent is choosing a hand to play…" oppRemainingCount={oppRemainingCount} />
       )}
 
@@ -81,13 +81,14 @@ function Header({ game, slot, code, onLeave, variant }) {
 
 // ---------- Play view (your turn to play a hand) ----------
 
-function PlayView({ code, slot, myHands, myRemainingIds }) {
+function PlayView({ code, slot, myHands, myRemainingIds, variant, currentRound }) {
+  const isLastRound = currentRound >= variant.handCount - 1
   const [pickedHandId, setPickedHandId] = useState(null)
   const [faceUp, setFaceUp] = useState([false, false, false, false, false])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  // Auto-pick the hand when only one remaining (round 5).
+  // Auto-pick when only one hand remains (always the case in the final round).
   useEffect(() => {
     if (pickedHandId == null && myRemainingIds.length === 1) {
       setPickedHandId(myRemainingIds[0])
@@ -110,7 +111,10 @@ function PlayView({ code, slot, myHands, myRemainingIds }) {
   async function commit() {
     setBusy(true); setError(null)
     try {
-      await playHand(code, slot, pickedHandId, faceUp)
+      // Server forces all-face-up on the last round, but send it explicitly
+      // so any client-side validation agrees.
+      const payload = isLastRound ? [true, true, true, true, true] : faceUp
+      await playHand(code, slot, pickedHandId, payload)
     } catch (e) {
       setError(e.message || 'Could not play hand.')
       setBusy(false)
@@ -157,22 +161,26 @@ function PlayView({ code, slot, myHands, myRemainingIds }) {
       ) : (
         <div>
           <div className="text-gold-200/80 mb-2">
-            Tap <b>3</b> cards to turn face-up. The other 2 stay hidden from your opponent.
+            {isLastRound
+              ? 'Final round — all 5 cards will be revealed.'
+              : <>Tap <b>3</b> cards to turn face-up. The other 2 stay hidden from your opponent.</>}
           </div>
           <div className="text-gold-200/60 text-xs mb-2">Hand #{pickedHand.id + 1}</div>
           <div className="flex gap-1.5 mb-3">
             {pickedHand.cards.map((c, i) => (
               <div key={i} className="flex-1 max-w-[18%]">
                 <CardSlot
-                  card={{ ...c, faceUp: faceUp[i] }}
+                  card={{ ...c, faceUp: isLastRound ? true : faceUp[i] }}
                   size="sm"
-                  selected={faceUp[i]}
-                  onClick={() => toggleFaceUp(i)}
+                  selected={!isLastRound && faceUp[i]}
+                  onClick={isLastRound ? undefined : () => toggleFaceUp(i)}
                 />
               </div>
             ))}
           </div>
-          <div className="text-gold-200/60 text-xs mb-3">{faceUpCount} / 3 face-up</div>
+          {!isLastRound && (
+            <div className="text-gold-200/60 text-xs mb-3">{faceUpCount} / 3 face-up</div>
+          )}
           <div className="flex gap-2">
             <Button
               variant="ghost"
@@ -181,7 +189,7 @@ function PlayView({ code, slot, myHands, myRemainingIds }) {
             >
               Change hand
             </Button>
-            <Button className="flex-1" onClick={commit} disabled={busy || faceUpCount !== 3}>
+            <Button className="flex-1" onClick={commit} disabled={busy || (!isLastRound && faceUpCount !== 3)}>
               {busy ? 'Playing…' : 'Play hand'}
             </Button>
           </div>
@@ -243,7 +251,6 @@ function WaitingOnResponseView({ game, oppRemainingCount }) {
 function RespondView({ code, slot, game, myHands, myRemainingIds }) {
   const offer = game.currentOffer
   const [pickedHandId, setPickedHandId] = useState(null)
-  const [faceUp, setFaceUp] = useState([false, false, false, false, false])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -254,22 +261,11 @@ function RespondView({ code, slot, game, myHands, myRemainingIds }) {
   }, [pickedHandId, myRemainingIds])
 
   const pickedHand = pickedHandId != null ? myHands.find(h => h.id === pickedHandId) : null
-  const faceUpCount = faceUp.filter(Boolean).length
-
-  function toggleFaceUp(i) {
-    setFaceUp(prev => {
-      const next = prev.slice()
-      if (next[i]) { next[i] = false; return next }
-      if (prev.filter(Boolean).length >= 3) return prev
-      next[i] = true
-      return next
-    })
-  }
 
   async function commit() {
     setBusy(true); setError(null)
     try {
-      await respondToHand(code, slot, pickedHandId, faceUp)
+      await respondToHand(code, slot, pickedHandId)
     } catch (e) {
       setError(e.message || 'Could not respond.')
       setBusy(false)
@@ -328,32 +324,26 @@ function RespondView({ code, slot, game, myHands, myRemainingIds }) {
       ) : (
         <div>
           <div className="text-gold-200/80 mb-2">
-            Tap <b>3</b> cards to turn face-up.
+            Your response. All 5 cards will be revealed.
           </div>
           <div className="text-gold-200/60 text-xs mb-2">Your hand #{pickedHand.id + 1}</div>
           <div className="flex gap-1.5 mb-3">
             {pickedHand.cards.map((c, i) => (
               <div key={i} className="flex-1 max-w-[18%]">
-                <CardSlot
-                  card={{ ...c, faceUp: faceUp[i] }}
-                  size="sm"
-                  selected={faceUp[i]}
-                  onClick={() => toggleFaceUp(i)}
-                />
+                <CardSlot card={{ ...c, faceUp: true }} size="sm" />
               </div>
             ))}
           </div>
-          <div className="text-gold-200/60 text-xs mb-3">{faceUpCount} / 3 face-up</div>
           <div className="flex gap-2">
             <Button
               variant="ghost"
-              onClick={() => { setPickedHandId(null); setFaceUp([false,false,false,false,false]) }}
+              onClick={() => setPickedHandId(null)}
               disabled={busy || myRemainingIds.length === 1}
             >
               Change hand
             </Button>
-            <Button className="flex-1" onClick={commit} disabled={busy || faceUpCount !== 3}>
-              {busy ? 'Responding…' : 'Commit response'}
+            <Button className="flex-1" onClick={commit} disabled={busy}>
+              {busy ? 'Responding…' : 'Play this hand'}
             </Button>
           </div>
           {error && <div className="text-red-300 text-sm mt-2">{error}</div>}

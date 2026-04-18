@@ -7,13 +7,14 @@ export default function HomeScreen({ onEnter }) {
   const [mode, setMode] = useState(null) // null | 'create' | 'join'
   const [code, setCode] = useState('')
   const [variantId, setVariantId] = useState('standard')
+  const [cannonFodder, setCannonFodder] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   async function handleCreate() {
     setBusy(true); setError(null)
     try {
-      const session = await createGame(variantId)
+      const session = await createGame({ variantId, cannonFodder })
       onEnter(session)
     } catch (e) {
       setError(e.message || 'Could not create game.')
@@ -79,6 +80,31 @@ export default function HomeScreen({ onEnter }) {
                   )
                 })}
               </div>
+            </div>
+            <div className="text-left">
+              <div className="text-gold-200/70 text-xs uppercase tracking-widest mb-2">Options</div>
+              <button
+                onClick={() => setCannonFodder(v => !v)}
+                className={[
+                  'w-full text-left rounded-xl border px-4 py-3 transition active:scale-[0.99] flex items-start gap-3',
+                  cannonFodder
+                    ? 'border-amber-500 bg-felt-800'
+                    : 'border-gold-600/30 bg-felt-800/60 hover:bg-felt-800',
+                ].join(' ')}
+              >
+                <div className={
+                  'mt-1 w-5 h-5 rounded border shrink-0 flex items-center justify-center ' +
+                  (cannonFodder ? 'bg-amber-500 border-amber-400 text-felt-900' : 'border-gold-600/60')
+                }>
+                  {cannonFodder ? '\u2713' : ''}
+                </div>
+                <div className="flex-1">
+                  <div className="text-gold-100 font-semibold">Cannon Fodder ★</div>
+                  <div className="text-gold-200/70 text-xs mt-1">
+                    Each player gets a Joker. Playing a hand with a Joker reverses the stakes — if your opponent has the strongest hand they lose the whole game; if they have the weakest they win it.
+                  </div>
+                </div>
+              </button>
             </div>
             <Button className="w-full" onClick={handleCreate} disabled={busy}>
               {busy ? 'Creating…' : 'Create Game'}

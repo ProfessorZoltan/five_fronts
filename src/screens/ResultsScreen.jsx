@@ -11,9 +11,19 @@ export default function ResultsScreen({ code, game, slot, onLeave }) {
     if (r.winner === slot) myWins++
     else if (r.winner === opp) oppWins++
   }
-  const isDraw = game.winner === 'draw' || myWins === oppWins
+  const isDraw = game.winner === 'draw' || (!game.cannonFodderEnding && myWins === oppWins)
   const youWon = game.winner === slot
   const [busy, setBusy] = useState(false)
+  const cfEnding = game.cannonFodderEnding
+  const cfBlurb = cfEnding
+    ? (cfEnding.jokerPlayer === slot
+        ? (cfEnding.roundWinner === slot
+            ? 'You played a Joker and won the round — opponent held the weaker hand, so they win the whole game.'
+            : 'You played a Joker and lost the round — opponent held the stronger hand, so they lose the whole game.')
+        : (cfEnding.roundWinner === slot
+            ? 'Opponent played a Joker and you held the stronger hand — they lose the whole game.'
+            : 'Opponent played a Joker and you held the weaker hand — you win the whole game.'))
+    : null
 
   async function handleRematch() {
     setBusy(true)
@@ -36,6 +46,12 @@ export default function ResultsScreen({ code, game, slot, onLeave }) {
         <div className="mt-2 text-gold-100/80">
           You won {myWins} — Opponent won {oppWins}
         </div>
+        {cfBlurb && (
+          <div className="mt-3 text-amber-300 text-sm border-t border-amber-500/30 pt-3">
+            ★ Cannon Fodder ★<br/>
+            {cfBlurb}
+          </div>
+        )}
       </div>
 
       <div className="p-3 space-y-2">

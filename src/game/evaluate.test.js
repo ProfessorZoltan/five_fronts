@@ -1,10 +1,12 @@
 // Lightweight self-tests for evaluate.js. Run with: `node src/game/evaluate.test.js`
 import { evaluateHand, compareHands, orderCardsForDisplay, HAND_LABELS } from './evaluate.js'
-import { RANK_VALUE } from './deck.js'
+import { RANK_VALUE, makeJoker } from './deck.js'
 
 function card(rank, suit) {
   return { rank, suit, value: RANK_VALUE[rank] }
 }
+
+const joker = () => makeJoker()
 
 let passed = 0, failed = 0
 function assert(cond, msg) {
@@ -122,6 +124,32 @@ assert(ranks(strOrder) === 'Q,J,10,9,8', 'straight: sorted desc')
 // Wheel: 5-high straight, ace moves to end
 const wheelOrder = orderCardsForDisplay([card('A','spades'), card('2','hearts'), card('3','clubs'), card('4','diamonds'), card('5','spades')])
 assert(ranks(wheelOrder) === '5,4,3,2,A', 'wheel: ace goes last')
+
+// --- Joker (Cannon Fodder) tests ---
+// The Joker has suit 'joker' and value 0. It must never contribute to a hand.
+
+// 4 hearts + Joker is NOT a flush (Joker breaks the suit match).
+const notFlush = [card('A','hearts'), card('K','hearts'), card('Q','hearts'), card('J','hearts'), joker()]
+assert(evaluateHand(notFlush).rank === 10, 'joker + 4 of a suit is high card, not flush')
+
+// A-K-Q-J + Joker is NOT a straight.
+const notStraight = [card('A','spades'), card('K','hearts'), card('Q','clubs'), card('J','diamonds'), joker()]
+assert(evaluateHand(notStraight).rank === 10, 'joker + 4 consecutive is high card, not straight')
+
+// Pair + 2 kickers + Joker is one pair with Joker as last kicker.
+const pairJoker = [card('A','spades'), card('A','hearts'), card('K','clubs'), card('7','diamonds'), joker()]
+const pjEval = evaluateHand(pairJoker)
+assert(pjEval.rank === 9, 'pair + joker-kicker is still one pair')
+assert(pjEval.tiebreakers[pjEval.tiebreakers.length - 1] === 0, 'joker kicker has value 0')
+
+// Three of a kind + K + Joker — still three of a kind (joker never fills the full house).
+const tripsJoker = [card('7','spades'), card('7','hearts'), card('7','clubs'), card('K','diamonds'), joker()]
+assert(evaluateHand(tripsJoker).rank === 7, 'trips + joker is NOT a full house')
+
+// A joker hand loses to any hand with a real pair.
+const highWithJoker = [card('A','spades'), card('K','hearts'), card('Q','clubs'), card('8','diamonds'), joker()]
+const lowPair = [card('2','spades'), card('2','hearts'), card('4','clubs'), card('5','diamonds'), card('7','clubs')]
+assert(compareHands(lowPair, highWithJoker) === 'p1', 'any pair beats a joker high-card')
 
 // Summary
 console.log(`\n${passed} passed, ${failed} failed`)

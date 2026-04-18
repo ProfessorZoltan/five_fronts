@@ -2,11 +2,28 @@
 // Card shape: { rank, suit, value }  value is 2..14 (Ace high by default).
 
 export const SUITS = ['clubs', 'diamonds', 'hearts', 'spades']
-export const SUIT_ORDER = { clubs: 1, diamonds: 2, hearts: 3, spades: 4 }
+// joker sorts below everything (ties are rare, but a joker always loses
+// the suit tiebreaker vs any real suit).
+export const SUIT_ORDER = { joker: 0, clubs: 1, diamonds: 2, hearts: 3, spades: 4 }
 export const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A']
 export const RANK_VALUE = {
   '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
   J: 11, Q: 12, K: 13, A: 14,
+}
+
+// Joker sentinel. Value 0 means it can't extend a straight, and its unique
+// suit 'joker' means it can't join a flush. It effectively contributes nothing
+// to hand strength and acts as the lowest possible kicker.
+export const JOKER_SUIT = 'joker'
+export const JOKER_RANK = 'Joker'
+export const JOKER_VALUE = 0
+
+export function makeJoker() {
+  return { rank: JOKER_RANK, suit: JOKER_SUIT, value: JOKER_VALUE }
+}
+
+export function isJoker(card) {
+  return card && card.suit === JOKER_SUIT
 }
 
 export function buildDeck() {
@@ -43,14 +60,19 @@ export function shuffle(deck, seed) {
 }
 
 // 52 cards -> two cardsPerPlayer-sized piles, remainder burned.
-// Defaults to 25 (standard variant). Three-hand uses 18.
-export function dealFromSeed(seed, cardsPerPlayer = 25) {
+// Defaults to 25 (standard variant). Three-hand uses 18. When `includeJoker`
+// is true (Cannon Fodder), each player additionally gets one Joker appended
+// to their pool — they may or may not choose to place it in a hand.
+export function dealFromSeed(seed, cardsPerPlayer = 25, includeJoker = false) {
   const deck = shuffle(buildDeck(), seed)
-  return {
-    p1: deck.slice(0, cardsPerPlayer),
-    p2: deck.slice(cardsPerPlayer, 2 * cardsPerPlayer),
-    burned: deck.slice(2 * cardsPerPlayer),
+  const p1 = deck.slice(0, cardsPerPlayer)
+  const p2 = deck.slice(cardsPerPlayer, 2 * cardsPerPlayer)
+  const burned = deck.slice(2 * cardsPerPlayer)
+  if (includeJoker) {
+    p1.push(makeJoker())
+    p2.push(makeJoker())
   }
+  return { p1, p2, burned }
 }
 
 export function randomSeed() {

@@ -28,7 +28,7 @@ import {
   ref, get, set, update, onValue, off, runTransaction,
 } from 'firebase/database'
 import { getDb, getPlayerId } from './client.js'
-import { dealFromSeed, randomSeed, randomGameCode } from '../game/deck.js'
+import { dealFromSeed, randomSeed, randomGameCode, isJoker } from '../game/deck.js'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
 import { getVariant, VARIANTS } from '../game/variants.js'
 
@@ -37,7 +37,7 @@ const childRef = (code, path) => ref(getDb(), `games/${code}/${path}`)
 
 // ---------- Create / Join ----------
 
-export async function createGame(variantId = 'standard') {
+export async function createGame({ variantId = 'standard', cannonFodder = false } = {}) {
   if (!VARIANTS[variantId]) throw new Error(`Unknown variant: ${variantId}`)
   const uid = getPlayerId()
   const db = getDb()
@@ -49,6 +49,7 @@ export async function createGame(variantId = 'standard') {
         status: 'waiting',
         seed: randomSeed(),
         variant: variantId,
+        cannonFodder: !!cannonFodder,
         createdAt: Date.now(),
         firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
         players: {
@@ -90,7 +91,7 @@ async function dealIfReady(code) {
   if (!g.players?.p1 || !g.players?.p2) return
 
   const variant = getVariant(g.variant)
-  const { p1, p2 } = dealFromSeed(g.seed, variant.cardsDealt)
+  const { p1, p2 } = dealFromSeed(g.seed, variant.cardsDealt, g.cannonFodder === true)
   await update(gameRef(code), {
     'players/p1/hand': p1,
     'players/p2/hand': p2,
@@ -148,8 +149,9 @@ function validateHands(hands, variant) {
 
 // ---------- Matchup phase ----------
 
-// Active player plays one of their remaining hands, choosing 3 of the 5 cards
-// to turn face-up. `faceUp` is a boolean array of length 5 matching card slots.
+// Active player plays one of their remaining hands.
+// On non-final rounds, `faceUp` must mark exactly 3 of the 5 cards face-up.
+// On the final round, the face-up choice is skipped — all 5 are revealed.
 export async function playHand(code, slot, handId, faceUp) {
   const snap = await get(gameRef(code))
   const g = snap.val()
@@ -159,10 +161,16 @@ export async function playHand(code, slot, handId, faceUp) {
 
   const used = usedHandIds(g.rounds || [], slot)
   if (used.has(handId)) throw new Error('Hand already used.')
-  assertFaceUpValid(faceUp)
+
+  const variant = getVariant(g.variant)
+  const isLast = (g.currentRound ?? 0) >= variant.handCount - 1
+
+  // On the last round the face-up choice is skipped — everything reveals.
+  const effectiveFaceUp = isLast ? [true, true, true, true, true] : faceUp
+  assertFaceUpValid(effectiveFaceUp, !isLast)
 
   const baseHand = g.players[slot].hands[handId].cards
-  const cards = baseHand.map((c, i) => ({ ...c, faceUp: !!faceUp[i] }))
+  const cards = baseHand.map((c, i) => ({ ...c, faceUp: !!effectiveFaceUp[i] }))
 
   await update(gameRef(code), {
     currentOffer: { handId, cards },
@@ -171,10 +179,11 @@ export async function playHand(code, slot, handId, faceUp) {
   })
 }
 
-// Responder picks one of their remaining hands + which 3 cards face-up.
-// On commit we compute the round's resolution, stash it on the round record,
-// and transition to 'reveal'.
-export async function respondToHand(code, slot, handId, faceUp) {
+// Responder picks one of their remaining hands. They no longer choose
+// face-up cards — the responder's hand is always revealed in full at resolve
+// time. (Strategically, hiding responder cards gave no information to the
+// offerer, who had already committed.)
+export async function respondToHand(code, slot, handId) {
   const snap = await get(gameRef(code))
   const g = snap.val()
   if (g.status !== 'matching') throw new Error('Not in matching phase.')
@@ -183,10 +192,9 @@ export async function respondToHand(code, slot, handId, faceUp) {
 
   const used = usedHandIds(g.rounds || [], slot)
   if (used.has(handId)) throw new Error('Hand already used.')
-  assertFaceUpValid(faceUp)
 
   const baseHand = g.players[slot].hands[handId].cards
-  const cards = baseHand.map((c, i) => ({ ...c, faceUp: !!faceUp[i] }))
+  const cards = baseHand.map(c => ({ ...c, faceUp: true }))
 
   await update(gameRef(code), {
     currentResponse: { handId, cards },
@@ -232,6 +240,47 @@ export async function readyForNextRound(code, slot) {
     p1HandRank: e1.label,
     p2HandRank: e2.label,
     winner,
+  }
+
+  // --- Cannon Fodder: if exactly one player played a Joker in this round,
+  // the game ends immediately with inverted stakes.
+  //   - Joker-player wins the round -> opposing had the WEAKER hand -> opposing wins the game
+  //   - Joker-player loses the round -> opposing had the STRONGER hand -> opposing LOSES the game
+  // If both played a Joker, the effect cancels and the round resolves normally.
+  const p1HasJoker = p1Cards.some(isJoker)
+  const p2HasJoker = p2Cards.some(isJoker)
+  const cfTriggers = g.cannonFodder === true && (p1HasJoker !== p2HasJoker)
+
+  if (cfTriggers) {
+    newRound.cannonFodder = true
+    const jokerPlayer = p1HasJoker ? 'p1' : 'p2'
+    const opposingPlayer = p1HasJoker ? 'p2' : 'p1'
+    let gameWinner
+    if (winner === jokerPlayer) {
+      gameWinner = opposingPlayer // opposing was weakest -> opposing wins game
+    } else if (winner === opposingPlayer) {
+      gameWinner = jokerPlayer    // opposing was strongest -> opposing loses game
+    } else {
+      gameWinner = 'draw'
+    }
+    await update(gameRef(code), {
+      rounds: [...(g.rounds || []), newRound],
+      currentOffer: null,
+      currentResponse: null,
+      roundReady: { p1: false, p2: false },
+      status: 'done',
+      winner: gameWinner,
+      cannonFodderEnding: {
+        jokerPlayer,
+        opposingPlayer,
+        roundWinner: winner,
+      },
+    })
+    return
+  }
+
+  if (g.cannonFodder === true && p1HasJoker && p2HasJoker) {
+    newRound.bothJokers = true // for display only
   }
 
   const rounds = [...(g.rounds || []), newRound]
@@ -283,12 +332,14 @@ function usedHandIds(rounds, slot) {
   return s
 }
 
-function assertFaceUpValid(faceUp) {
+function assertFaceUpValid(faceUp, requireThree = true) {
   if (!Array.isArray(faceUp) || faceUp.length !== 5) {
     throw new Error('faceUp must be an array of 5 booleans.')
   }
-  const trues = faceUp.filter(Boolean).length
-  if (trues !== 3) throw new Error('Exactly 3 cards must be face-up.')
+  if (requireThree) {
+    const trues = faceUp.filter(Boolean).length
+    if (trues !== 3) throw new Error('Exactly 3 cards must be face-up.')
+  }
 }
 
 function stripFaceUp(cards) {
@@ -329,12 +380,14 @@ export async function rematch(code) {
   const snap = await get(gameRef(code))
   const g = snap.val()
   const variant = getVariant(g.variant)
+  const cannonFodder = g.cannonFodder === true
   const seed = randomSeed()
-  const deal = dealFromSeed(seed, variant.cardsDealt)
+  const deal = dealFromSeed(seed, variant.cardsDealt, cannonFodder)
   await set(gameRef(code), {
     status: 'setting',
     seed,
     variant: variant.id,
+    cannonFodder,
     createdAt: Date.now(),
     firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
     players: {

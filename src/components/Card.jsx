@@ -6,12 +6,14 @@ const SUIT_GLYPH = {
   diamonds: '\u2666',
   hearts: '\u2665',
   spades: '\u2660',
+  joker: '\u2605', // star, rendered by JokerFace
 }
 const SUIT_COLOR = {
   clubs: 'text-slate-900',
   spades: 'text-slate-900',
   diamonds: 'text-red-600',
   hearts: 'text-red-600',
+  joker: 'text-amber-700',
 }
 
 export function CardBack({ className = '', size = 'md' }) {
@@ -34,6 +36,17 @@ export function CardBack({ className = '', size = 'md' }) {
 }
 
 export function CardFace({ card, dimmed = false, highlighted = false, wasFaceDown = false, size = 'md', className = '' }) {
+  if (card.suit === 'joker') {
+    return (
+      <JokerFace
+        dimmed={dimmed}
+        highlighted={highlighted}
+        wasFaceDown={wasFaceDown}
+        size={size}
+        className={className}
+      />
+    )
+  }
   const s = sizeClasses(size)
   const color = SUIT_COLOR[card.suit]
   return (
@@ -58,6 +71,34 @@ export function CardFace({ card, dimmed = false, highlighted = false, wasFaceDow
       <div className={`absolute inset-0 flex items-center justify-center ${color} ${s.center} no-select`}>
         {SUIT_GLYPH[card.suit]}
       </div>
+      {wasFaceDown && (
+        <div className="absolute top-0 left-0 right-0 flex justify-center">
+          <div className="bg-felt-900 text-gold-400 text-[0.5rem] font-bold tracking-widest px-1.5 py-0.5 rounded-b-md shadow">
+            HIDDEN
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function JokerFace({ dimmed, highlighted, wasFaceDown, size, className }) {
+  const s = sizeClasses(size)
+  return (
+    <div
+      className={[
+        'relative rounded-lg shadow-md border overflow-hidden',
+        'bg-gradient-to-br from-amber-100 to-amber-300',
+        wasFaceDown ? 'border-felt-900 ring-2 ring-felt-900/70' : 'border-amber-600',
+        dimmed ? 'opacity-40' : '',
+        highlighted ? 'ring-4 ring-emerald-400 shadow-emerald-400/40' : '',
+        s.root,
+        className,
+      ].join(' ')}
+    >
+      <div className={`absolute top-0.5 left-1 text-amber-800 ${s.corner} no-select font-bold leading-none`}>JKR</div>
+      <div className={`absolute bottom-0.5 right-1 text-amber-800 ${s.corner} no-select font-bold leading-none rotate-180`}>JKR</div>
+      <div className={`absolute inset-0 flex items-center justify-center text-amber-700 ${s.center} no-select`}>★</div>
       {wasFaceDown && (
         <div className="absolute top-0 left-0 right-0 flex justify-center">
           <div className="bg-felt-900 text-gold-400 text-[0.5rem] font-bold tracking-widest px-1.5 py-0.5 rounded-b-md shadow">
