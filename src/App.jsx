@@ -8,6 +8,7 @@ import MatchupScreen from './screens/MatchupScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import AbandonedScreen from './screens/AbandonedScreen.jsx'
 import ConfigMissingBanner from './components/ConfigMissingBanner.jsx'
+import LeaveButton from './components/LeaveButton.jsx'
 
 // localStorage, not sessionStorage — the latter is evicted by iOS/Android
 // when the tab is backgrounded (e.g. incoming phone call), which kicked
@@ -59,8 +60,14 @@ export default function App() {
 
   if (!game) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gold-400">
-        <div className="animate-pulseSoft">Reconnecting…</div>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-gold-400">
+        <div className="animate-pulseSoft mb-6">Reconnecting…</div>
+        <LeaveButton
+          code={session.code}
+          slot={session.slot}
+          onLeave={() => setSession(null)}
+          label="Back to home"
+        />
       </div>
     )
   }

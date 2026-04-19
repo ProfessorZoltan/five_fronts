@@ -127,7 +127,8 @@ export default function SettingScreen({ code, game, slot, onLeave }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
         <div className="text-gold-400 font-display text-3xl mb-2">Locked In</div>
-        <div className="text-gold-200/70 animate-pulseSoft">Waiting for opponent…</div>
+        <div className="text-gold-200/70 animate-pulseSoft mb-6">Waiting for opponent…</div>
+        <LeaveButton code={code} slot={slot} onLeave={onLeave} />
       </div>
     )
   }
