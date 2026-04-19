@@ -39,8 +39,8 @@ export function HomeInstructions() {
           gets a Joker. Playing a hand containing your Joker reverses the stakes
           for that round: if opponent's hand is weaker, they win the whole game;
           if stronger, they lose. If both players play a Joker in the same
-          round, the reversal cancels. A hand with a Joker can't be played as
-          the final hand.
+          round, the hand plays like a regular hand — strongest hand gets
+          1 point. A hand with a Joker can't be played as the final hand.
         </p>
       </Section>
       <p className="text-xs text-gold-200/60">
@@ -205,7 +205,7 @@ export function MatchupInstructions({ game }) {
           <ul className="list-disc ml-5 space-y-1">
             <li>If opponent's hand is the <b>weaker</b> of the two, opponent wins the <i>entire game</i>.</li>
             <li>If opponent's hand is the <b>stronger</b> of the two, opponent <i>loses</i> the entire game.</li>
-            <li>If both players play a Joker in the same round, the reversal cancels and the round resolves normally.</li>
+            <li>If both players play a Joker in the same round, the hand plays like a regular hand — strongest hand gets 1 point.</li>
           </ul>
           <p>
             A Joker hand can't be played as the final hand. If you still hold
