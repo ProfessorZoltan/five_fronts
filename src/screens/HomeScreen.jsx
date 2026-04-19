@@ -38,13 +38,38 @@ export default function HomeScreen({ onEnter }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative">
-      <div className="absolute top-4 right-4">
+    <div
+      className="min-h-screen relative bg-felt-900 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/saloon-bg.jpg)' }}
+    >
+      {/* Dark scrim over the image for readability. Vignette-style gradient:
+          edges darker, middle slightly lighter so the saloon doors still read. */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(7,32,24,0.55) 0%, rgba(7,32,24,0.85) 100%), linear-gradient(180deg, rgba(7,32,24,0.45) 0%, transparent 25%, transparent 75%, rgba(7,32,24,0.80) 100%)',
+        }}
+      />
+
+      <div className="absolute top-4 right-4 z-20">
         <InfoButton><HomeInstructions /></InfoButton>
       </div>
-      <div className="w-full max-w-sm text-center">
-        <h1 className="font-display text-5xl text-gold-400 drop-shadow mb-1">Five Fronts</h1>
-        <p className="text-gold-200/70 mb-10 tracking-wider">a poker hand duel</p>
+
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm text-center">
+        <h1
+          className="font-display text-5xl text-gold-400 mb-1"
+          style={{ textShadow: '0 2px 16px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.6)' }}
+        >
+          Five Fronts
+        </h1>
+        <p
+          className="text-gold-200/90 mb-10 tracking-wider"
+          style={{ textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}
+        >
+          a poker hand duel
+        </p>
 
         {mode === null && (
           <div className="space-y-3">
@@ -70,10 +95,10 @@ export default function HomeScreen({ onEnter }) {
                       key={id}
                       onClick={() => setVariantId(id)}
                       className={[
-                        'w-full text-left rounded-xl border px-4 py-3 transition active:scale-[0.99]',
+                        'w-full text-left rounded-xl border px-4 py-3 transition active:scale-[0.99] backdrop-blur-sm',
                         selected
-                          ? 'border-gold-400 bg-felt-800'
-                          : 'border-gold-600/30 bg-felt-800/60 hover:bg-felt-800',
+                          ? 'border-gold-400 bg-felt-800/95'
+                          : 'border-gold-600/40 bg-felt-800/80 hover:bg-felt-800',
                       ].join(' ')}
                     >
                       <div className="flex items-baseline justify-between gap-2">
@@ -91,10 +116,10 @@ export default function HomeScreen({ onEnter }) {
               <button
                 onClick={() => setCannonFodder(v => !v)}
                 className={[
-                  'w-full text-left rounded-xl border px-4 py-3 transition active:scale-[0.99] flex items-start gap-3',
+                  'w-full text-left rounded-xl border px-4 py-3 transition active:scale-[0.99] flex items-start gap-3 backdrop-blur-sm',
                   cannonFodder
-                    ? 'border-amber-500 bg-felt-800'
-                    : 'border-gold-600/30 bg-felt-800/60 hover:bg-felt-800',
+                    ? 'border-amber-500 bg-felt-800/95'
+                    : 'border-gold-600/40 bg-felt-800/80 hover:bg-felt-800',
                 ].join(' ')}
               >
                 <div className={
@@ -141,9 +166,15 @@ export default function HomeScreen({ onEnter }) {
         )}
 
         {error && <div className="mt-4 text-red-300">{error}</div>}
+        </div>
       </div>
 
-      <div className="absolute bottom-4 text-gold-200/30 text-xs">Tap a button to begin</div>
+      <div
+        className="absolute bottom-4 left-0 right-0 text-center z-10 text-gold-200/60 text-xs"
+        style={{ textShadow: '0 1px 4px rgba(0,0,0,0.85)' }}
+      >
+        Tap a button to begin
+      </div>
     </div>
   )
 }
