@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
+import InfoButton from '../components/InfoButton.jsx'
+import { HomeInstructions } from '../components/Instructions.jsx'
 import { createGame, joinGame } from '../firebase/game.js'
 import { VARIANTS, VARIANT_ORDER } from '../game/variants.js'
 
@@ -36,7 +38,10 @@ export default function HomeScreen({ onEnter }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative">
+      <div className="absolute top-4 right-4">
+        <InfoButton><HomeInstructions /></InfoButton>
+      </div>
       <div className="w-full max-w-sm text-center">
         <h1 className="font-display text-5xl text-gold-400 drop-shadow mb-1">Five Fronts</h1>
         <p className="text-gold-200/70 mb-10 tracking-wider">a poker hand duel</p>

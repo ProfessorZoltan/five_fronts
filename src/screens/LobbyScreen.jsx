@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
 import LeaveButton from '../components/LeaveButton.jsx'
+import InfoButton from '../components/InfoButton.jsx'
+import { LobbyInstructions } from '../components/Instructions.jsx'
 import { getVariant } from '../game/variants.js'
 
 export default function LobbyScreen({ code, game, slot, onLeave }) {
@@ -17,7 +19,10 @@ export default function LobbyScreen({ code, game, slot, onLeave }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative">
+      <div className="absolute top-4 right-4">
+        <InfoButton><LobbyInstructions game={game} /></InfoButton>
+      </div>
       <div className="w-full max-w-sm text-center space-y-8">
         <div>
           <div className="text-gold-200/60 uppercase tracking-[0.4em] text-xs mb-2">Game Code</div>

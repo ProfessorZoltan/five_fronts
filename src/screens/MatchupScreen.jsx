@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import Button from '../components/Button.jsx'
 import LeaveButton from '../components/LeaveButton.jsx'
+import InfoButton from '../components/InfoButton.jsx'
+import { MatchupInstructions } from '../components/Instructions.jsx'
 import { CardBack, CardSlot } from '../components/Card.jsx'
 import ResultCard from '../components/ResultCard.jsx'
 import { evaluateHand, compareHands } from '../game/evaluate.js'
@@ -93,11 +95,14 @@ function Header({ game, slot, code, onLeave, variant }) {
   }
   const n = (game.currentRound ?? 0) + 1
   return (
-    <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur px-4 py-3 border-b border-gold-600/20 flex items-center justify-between gap-2">
-      <div className="flex-1 min-w-0">
-        <div className="text-gold-400 font-display text-lg leading-none">Round {n} of {variant.handCount}</div>
-        <div className="text-gold-200/60 text-xs truncate">
-          {game.currentPlayer === slot ? 'Your turn' : 'Opponent\'s turn'}
+    <div className="sticky top-0 z-10 bg-felt-900/95 backdrop-blur px-3 py-3 border-b border-gold-600/20 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <InfoButton size="sm"><MatchupInstructions game={game} /></InfoButton>
+        <div className="flex-1 min-w-0">
+          <div className="text-gold-400 font-display text-lg leading-none">Round {n} of {variant.handCount}</div>
+          <div className="text-gold-200/60 text-xs truncate">
+            {game.currentPlayer === slot ? 'Your turn' : 'Opponent\'s turn'}
+          </div>
         </div>
       </div>
       <div className="text-sm whitespace-nowrap">

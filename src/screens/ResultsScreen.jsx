@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Button from '../components/Button.jsx'
+import InfoButton from '../components/InfoButton.jsx'
+import { ResultsInstructions } from '../components/Instructions.jsx'
 import ResultCard from '../components/ResultCard.jsx'
 import { rematch } from '../firebase/game.js'
 
@@ -33,9 +35,12 @@ export default function ResultsScreen({ code, game, slot, onLeave }) {
   return (
     <div className="min-h-screen flex flex-col pb-4">
       <div className={
-        'p-6 text-center border-b border-gold-600/20 ' +
+        'relative p-6 text-center border-b border-gold-600/20 ' +
         (youWon ? 'bg-emerald-600/10' : isDraw ? 'bg-felt-800' : 'bg-red-900/10')
       }>
+        <div className="absolute top-4 right-4">
+          <InfoButton size="sm"><ResultsInstructions game={game} /></InfoButton>
+        </div>
         <div className="text-gold-200/60 uppercase tracking-widest text-xs">Game Over</div>
         <div className={
           'font-display text-4xl mt-1 ' +
