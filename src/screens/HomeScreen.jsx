@@ -40,7 +40,7 @@ export default function HomeScreen({ onEnter }) {
   return (
     <div
       className="min-h-screen relative bg-felt-900 bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: 'url(/saloon-bg.jpg)' }}
+      style={{ backgroundImage: 'url(/saloon-bg.png)' }}
     >
       {/* Dark scrim over the image for readability. Vignette-style gradient:
           edges darker, middle slightly lighter so the saloon doors still read. */}
